@@ -26,13 +26,17 @@ __Note__: There are future plans to have Quickmail piggyback on 2.x internal
 messaging, which will provide a lot of implicit benefits as well as the
 negation of sending archives as attachments.
 
-## Download
-
-Visit [Quickmail's Github page][quickmail_github] to either download a package or clone the git repository.
-
 ## Installation
 
-Quickmail should be installed like any other block. See [the Moodle Docs page on block installation][block_doc].
+To install Moodle 2.1+ using git, execute the following commands in the root of your Moodle install:
+
+    git clone git://github.com/bumoodle/moodle-block_quickmail.git blocks/quickmail
+    echo '/blocks/quickmail' >> .git/info/exclude
+    
+Or, extract the following zip in your_moodle_root/blocks/:
+
+    https://github.com/ktemkin/moodle-block_quickmail/zipball/master
+
 
 ## Contributions
 
