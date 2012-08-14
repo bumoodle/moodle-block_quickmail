@@ -1,5 +1,4 @@
-(function(){
-  // Written at Louisiana State University
+(function() {
   $(document).ready(function() {
     var clear_selections, mailed, move, potentials, quickmail_changer, selectors;
     potentials = "#from_users";
@@ -56,8 +55,12 @@
         return $(elem).val().split(' ')[0];
       };
       ids = $(mailed).children("*").map(mapper).get().join(',');
-      $("input[name=mailto]").val(ids);
-      return true;
+      if (ids === '') {
+        return false;
+      } else {
+        $("input[name=mailto]").val(ids);
+        return true;
+      }
     });
   });
-})();
+}).call(this);

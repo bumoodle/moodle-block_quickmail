@@ -33,20 +33,16 @@ if (!$canimpersonate and $userid != $USER->id) {
 
 $config = quickmail::load_config($courseid);
 
-$valid_actions = array('delete', 'confirm');
+$proper_permission = (
+    has_capability('block/quickmail:cansend', $context) or
+    (!empty($config['allowstudents']) and $type == 'drafts')
+);
 
-$can_send = has_capability('block/quickmail:cansend', $context);
-
-$proper_permission = ($can_send or !empty($config['allowstudents']));
-
-$can_delete = ($can_send or ($proper_permission and $type == 'drafts'));
-
-// Stops students from tempering with history
-if (!$proper_permission or (!$can_delete and in_array($action, $valid_actions))) {
+if (!$proper_permission) {
     print_error('no_permission', 'block_quickmail');
 }
 
-if (isset($action) and !in_array($action, $valid_actions)) {
+if (isset($action) and !in_array($action, array('delete', 'confirm'))) {
     print_error('not_valid_action', 'block_quickmail', '', $action);
 }
 
@@ -73,7 +69,7 @@ $count = $DB->count_records($dbtable, $params);
 
 switch ($action) {
     case "confirm":
-        if (quickmail::cleanup($dbtable, $context->id, $typeid)) {
+        if(quickmail::cleanup($dbtable, $typeid)) {
             $url = new moodle_url('/blocks/quickmail/emaillog.php', array(
                 'courseid' => $courseid,
                 'type' => $type
@@ -85,7 +81,7 @@ switch ($action) {
         $html = quickmail::delete_dialog($courseid, $type, $typeid);
         break;
     default:
-        $html = quickmail::list_entries($courseid, $type, $page, $perpage, $userid, $count, $can_delete);
+        $html = quickmail::list_entries($courseid, $type, $page, $perpage, $userid, $count);
 }
 
 if($canimpersonate and $USER->id != $userid) {

@@ -1,5 +1,6 @@
 # Written at Louisiana State University
 
+
 $(document).ready () ->
     potentials = "#from_users"
     mailed = "#mail_users"
@@ -52,5 +53,6 @@ $(document).ready () ->
 
         ids = $(mailed).children("*").map(mapper).get().join ','
 
-        $("input[name=mailto]").val(ids);
-        true
+        if ids == '' then false else
+            $("input[name=mailto]").val(ids);
+            true
