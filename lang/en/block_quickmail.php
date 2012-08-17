@@ -1,13 +1,14 @@
 <?php
 
-$string['pluginname'] = 'Quickmail';
-$string['quickmail:cansend'] = "Allows users to send email through Quickmail";
-$string['quickmail:canconfig'] = "Allows users to configure Quickmail instance.";
+$string['pluginname'] = 'MoodleMail';
+$string['quickmail:cansend'] = "Allows users to send email through MoodleMail";
+$string['quickmail:canconfig'] = "Allows users to configure MoodleMail instance.";
 $string['quickmail:canimpersonate'] = "Allows users to log in as other users and view history.";
 $string['quickmail:allowalternate'] = "Allows users to add an alternate email for courses.";
-$string['backup_history'] = 'Include Quickmail History';
-$string['restore_history'] = 'Restore Quickmail History';
-$string['overwrite_history'] = 'Overwrite Quickmail History';
+$string['quickmail:canaskinstructor'] = "Allows user to message their instructor(s) using MoodleMail.";
+$string['backup_history'] = 'Include MoodleMail History';
+$string['restore_history'] = 'Restore MoodleMail History';
+$string['overwrite_history'] = 'Overwrite MoodleMail History';
 $string['alternate'] = 'Alternate Emails';
 $string['composenew'] = 'Compose New Email';
 $string['email'] = 'Email';
@@ -36,6 +37,7 @@ $string['signature'] = 'Signatures';
 $string['delete_confirm'] = 'Are you sure you want to delete message with the following details: {$a}';
 $string['title'] = 'Title';
 $string['sig'] ='Signature';
+$string['nosig'] ='No Signature';
 $string['default_flag'] = 'Default';
 $string['config'] = 'Configuration';
 $string['receipt'] = 'Receive a copy';
@@ -47,7 +49,7 @@ $string['select_users'] = 'Select Users ...';
 $string['select_groups'] = 'Select Sections ...';
 
 // Config form strings
-$string['allowstudents'] = 'Allow students to use Quickmail';
+$string['allowstudents'] = 'Allow students to use MoodleMail';
 $string['select_roles'] = 'Roles to filter by';
 $string['reset'] = 'Restore System Defaults';
 
@@ -86,7 +88,7 @@ $string['entry_key_not_valid'] = 'Activation link is no longer valid for {$a->ad
 $string['entry_saved'] = 'Alternate address {$a->address} has been saved.';
 $string['entry_success'] = 'An email to verify that the address is valid has been sent to {$a->address}. Instructions on how to activate the address is contained in its contents.';
 $string['entry_failure'] = 'An email could not be sent to {$a->address}. Please verify that {$a->address} exists, and try again.';
-$string['alternate_from'] = 'Moodle: Quickmail';
+$string['alternate_from'] = 'Moodle: MoodleMail';
 $string['alternate_subject'] = 'Alternate email address verification';
 $string['alternate_body'] = '
 <p>

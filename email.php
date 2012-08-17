@@ -1,56 +1,96 @@
 <?php
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-// Written at Louisiana State University
-
+// Require the main Moodle configuration, which, in turn, integrates this page into Moodle.
 require_once('../../config.php');
+
+// Require the local library functions, and the core e-mail form.
 require_once('lib.php');
 require_once('email_form.php');
 
+// Only allow logged in users to use QuickMail.
 require_login();
 
+// Get the optional and required GET parameters:
+//
+// Course ID: the course for which this message is being sent. This is used for two purposes:
+// - Instructors are limited to sending within the current course.
+// - Students with the Ask Instructor permission are limited to messaging their course instructor.
+//
+// Type: the view to display. This can be one of three options:
+// - (empty):   The send new e-mail screen will be displayed.
+// - 'log':     An e-mail from the user's history will be displayed; and typeid is required.
+// - 'drafts':  An e-mail from the user's draft collection will be displayed; typeid is required.
 $courseid = required_param('courseid', PARAM_INT);
 $type = optional_param('type', '', PARAM_ALPHA);
 $typeid = optional_param('typeid', 0, PARAM_INT);
 $sigid = optional_param('sigid', 0, PARAM_INT);
+$using_ajax = optional_param('ajax', 0, PARAM_BOOL);
 
+// If the course ID wasn't valid...
 if (!$course = $DB->get_record('course', array('id' => $courseid))) {
+
+    // ... print the "invalid course" error message.
     print_error('no_course', 'block_quickmail', '', $courseid);
 }
 
+// If an invalid type was specified...
 if (!empty($type) and !in_array($type, array('log', 'drafts'))){
+
+    // ... display an appropirate error message.
     print_error('no_type', 'block_quickmail', '', $type);
 }
 
+// If a type was provided, but no type ID, then display an error message.
 if (!empty($type) and empty($typeid)) {
+
+    // Gather the data for the error message...
     $string = new stdclass;
     $string->tpe = $type;
     $string->id = $typeid;
 
+    // ... and then display it to the user.
     print_error('no_typeid', 'block_quickmail', '', $string);
 }
 
-$config = quickmail::load_config($courseid);
+// Load the QuickMail configuration for the current course into the $localconfig object.
+$qm_config = quickmail::load_config($courseid);
 
+// Fetch the current course context.
 $context = get_context_instance(CONTEXT_COURSE, $courseid);
-$has_permission = (
-    has_capability('block/quickmail:cansend', $context) or
-    !empty($config['allowstudents'])
-);
 
+// Determine if the given user should be able to send mail.
+// FIXME: Use the user's capabilities instead of this configuration object.
+$has_permission = ( has_capability('block/quickmail:cansend', $context) or !empty($qm_config['allowstudents']));
+
+// If the user doesn't have permission to send mail, then print an error message and quit.
 if (!$has_permission) {
     print_error('no_permission', 'block_quickmail');
 }
 
-$sigs = $DB->get_records('block_quickmail_signatures',
-    array('userid' => $USER->id), 'default_flag DESC');
+//get a list of mail signatures for the current user
+$sigs = quickmail::get_user_signatures();
 
 $alt_params = array('courseid' => $course->id, 'valid' => 1);
-$alternates = $DB->get_records_menu('block_quickmail_alternate',
-    $alt_params, '', 'id, address');
+$alternates = $DB->get_records_menu('block_quickmail_alternate', $alt_params, '', 'id, address');
 
 $blockname = quickmail::_s('pluginname');
 $header = quickmail::_s('email');
 
+// If we're not in AJAX-view, set up the Moodle page.
 $PAGE->set_context($context);
 $PAGE->set_course($course);
 $PAGE->navbar->add($blockname);
@@ -60,13 +100,15 @@ $PAGE->set_heading($blockname . ': '.$header);
 $PAGE->set_url('/course/view.php', array('courseid' => $courseid));
 $PAGE->set_pagetype($blockname);
 
+//TODO: replace jquery with the local plugin
 $PAGE->requires->js('/blocks/quickmail/js/jquery.js');
 $PAGE->requires->js('/blocks/quickmail/js/selection.js');
+
 
 $course_roles = get_roles_used_in_context($context);
 
 $filter_roles = $DB->get_records_select('role',
-    sprintf('id IN (%s)', $config['roleselection']));
+    sprintf('id IN (%s)', $qm_config['roleselection']));
 
 $roles = quickmail::filter_roles($course_roles, $filter_roles);
 
@@ -91,9 +133,7 @@ $users = array();
 $users_to_roles = array();
 $users_to_groups = array();
 
-$everyone = get_role_users(0, $context, false, 'u.id, u.firstname, u.lastname,
-    u.email, u.mailformat, u.maildisplay, r.id AS roleid',
-    'u.lastname, u.firstname');
+$everyone = get_role_users(0, $context, false, 'u.id, u.firstname, u.lastname, u.email, u.mailformat, u.maildisplay, r.id AS roleid', 'u.lastname, u.firstname');
 
 foreach ($everyone as $userid => $user) {
     $usergroups = groups_get_user_groups($courseid, $userid);
@@ -147,21 +187,20 @@ $editor_options = array(
     'trusttext' => true,
     'subdirs' => true,
     'maxfiles' => EDITOR_UNLIMITED_FILES,
-    'context' => $context
+    'context' => $context,
 );
 
-$email = file_prepare_standard_editor($email, 'message', $editor_options,
-    $context, 'block_quickmail', $type, $email->id);
+$email = file_prepare_standard_editor($email, 'message', $editor_options, $context, 'block_quickmail', $type, $email->id);
 
 $selected = array();
 if (!empty($email->mailto)) {
     foreach (explode(',', $email->mailto) as $id) {
         $selected[$id] = $users[$id];
-        unset($users[$id]);
-    }
+        unset($users[$id]); }
 }
 
-$form = new email_form(null, array(
+$data = 
+array(
     'editor_options' => $editor_options,
     'selected' => $selected,
     'users' => $users,
@@ -171,140 +210,85 @@ $form = new email_form(null, array(
     'users_to_groups' => $users_to_groups,
     'sigs' => array_map(function($sig) { return $sig->title; }, $sigs),
     'alternates' => $alternates
-));
+);
+$form = new email_form(null, $data);
 
-$warnings = array();
 
+// If the form was cancelled, then redirect to the QuickMail view screen.
 if ($form->is_cancelled()) {
     redirect(new moodle_url('/course/view.php?id='.$courseid));
-} else if ($data = $form->get_data()) {
+}
+
+// Start a list of errors for the user.
+$errors = array();
+
+
+// Otherwise, get the data currently associated with the message form.
+$data = $form->get_data();
+
+// If we were able to parse valid data from the from...
+if ($data) {
+
+    // If no subject was provided, queue a warning for the user.
     if (empty($data->subject)) {
-        $warnings[] = get_string('no_subject', 'block_quickmail');
+        $errors[] = get_string('no_subject', 'block_quickmail');
     }
 
+    // If no destination was provided, queue a warning for the user.
     if (empty($data->mailto)) {
-        $warnings[] = get_string('no_users', 'block_quickmail');
+        $errors[] = get_string('no_users', 'block_quickmail');
     }
 
-    if (empty($warnings)) {
+    // If no errors occurred, then attempt to send the message.
+    if (empty($errors)) {
 
-        // Submitted data
-        $data->time = time();
-        $data->format = $data->message_editor['format'];
-        $data->message = $data->message_editor['text'];
-        $data->attachment = quickmail::attachment_names($data->attachments);
+        // Send e-mail message from the form data.
+        $errors = quickmail::send_message_from_form_data($data, $everyone, $editor_options, $context, $type);
 
-        // Store data; id is needed for file storage
-        if (isset($data->send)) {
-            $data->id = $DB->insert_record('block_quickmail_log', $data);
-            $table = 'log';
-        } else if (isset($data->draft)) {
-            $table = 'drafts';
-
-            if (!empty($typeid) and $type == 'drafts') {
-                $data->id = $typeid;
-                $DB->update_record('block_quickmail_drafts', $data);
-            } else {
-                $data->id = $DB->insert_record('block_quickmail_drafts', $data);
-            }
-        }
-
-        $data = file_postupdate_standard_editor($data, 'message', $editor_options,
-            $context, 'block_quickmail', $table, $data->id);
-
-        $DB->update_record('block_quickmail_'.$table, $data);
-
-        $prepender = $config['prepend_class'];
-        if (!empty($prepender) and !empty($course->$prepender)) {
-            $subject = "[{$course->$prepender}] $data->subject";
-        } else {
-            $subject = $data->subject;
-        }
-
-        // An instance id is needed before storing the file repository
-        file_save_draft_area_files($data->attachments, $context->id,
-            'block_quickmail', 'attachment_' . $table, $data->id);
-
-        // Send emails
-        if (isset($data->send)) {
-            if ($type == 'drafts') {
-                quickmail::draft_cleanup($typeid);
-            }
-
-            list($zipname, $zip, $actual_zip) = quickmail::process_attachments(
-                $context, $data, $table, $data->id
-            );
-
-            if (!empty($sigs) and $data->sigid > -1) {
-                $sig = $sigs[$data->sigid];
-
-                $signaturetext = file_rewrite_pluginfile_urls($sig->signature,
-                    'pluginfile.php', $context->id, 'block_quickmail',
-                    'signature', $sig->id, $editor_options);
-
-                $data->message .= $signaturetext;
-            }
-
-            // Prepare html content of message
-            $data->message = file_rewrite_pluginfile_urls($data->message, 'pluginfile.php',
-                $context->id, 'block_quickmail', $table, $data->id,
-                $editor_options);
-
-            // Same user, alternate email
-            if (!empty($data->alternateid)) {
-                $user = clone($USER);
-                $user->email = $alternates[$data->alternateid];
-            } else {
-                $user = $USER;
-            }
-
-            foreach (explode(',', $data->mailto) as $userid) {
-                $success = email_to_user($everyone[$userid], $user, $subject,
-                    strip_tags($data->message), $data->message, $zip, $zipname);
-
-                if(!$success) {
-                    $warnings[] = get_string("no_email", 'block_quickmail', $everyone[$userid]);
-                }
-            }
-
-            if ($data->receipt) {
-                email_to_user($USER, $user, $subject,
-                    strip_tags($data->message), $data->message, $zip, $zipname);
-            }
-
-            if (!empty($actual_zip)) {
-                unlink($actual_zip);
-            }
-        }
-    }
-    $email = $data;
-}
-
-if (empty($email->attachments)) {
-    if(!empty($type)) {
-        $attachid = file_get_submitted_draft_itemid('attachment');
-        file_prepare_draft_area(
-            $attachid, $context->id, 'block_quickmail',
-            'attachment_' . $type, $typeid
-        );
-        $email->attachments = $attachid;
+        // ??? 
+        //$email = $data;
     }
 }
 
-$form->set_data($email);
+// If the message was sent without attachments and _wasn't_ an existing draft or history item,
+// create a new draft area for attachments.
+if (empty($data->attachments) && !empty($type)) {
 
-if (empty($warnings)) {
-    if (isset($email->send))
-        redirect(new moodle_url('/blocks/quickmail/emaillog.php',
-            array('courseid' => $course->id)));
-    else if (isset($email->draft))
+    // Get the draft item ID associated with the attachment file manager, if files have already been uploaded.
+    $attachid = file_get_submitted_draft_itemid('attachment');
+
+    // And create a new draft file area for the files, if necessary.
+    file_prepare_draft_area($attachid, $context->id, 'block_quickmail', 'attachment_' . $type, $typeid);
+
+    // If we just created a draft file area for the files, associate it with the form.
+    $data->attachments = $attachid;
+}
+
+// Re-load the form to correspond to the e-mailed data.
+$form->set_data($data);
+
+// If no errors occurred, then redirect the user to the "sent messages" box.
+if (empty($errors)) {
+
+    if (isset($data->send)) {
+
+        redirect(new moodle_url('/blocks/quickmail/emaillog.php', array('courseid' => $course->id)));
+
+    } else if (isset($data->draft)) {
+
         $warnings['success'] = get_string("changessaved");
+
+    }
 }
 
-echo $OUTPUT->header();
-echo $OUTPUT->heading($blockname);
+// If we're not using QuickMail from an AJAX div, then output the header.
+if(!$using_ajax) { 
+    echo $OUTPUT->header();
+    echo $OUTPUT->heading($blockname);
+}
 
-foreach ($warnings as $type => $warning) {
+foreach ($errors as $type => $error) 
+{
     $class = ($type == 'success') ? 'notifysuccess' : 'notifyproblem';
     echo $OUTPUT->notification($warning, $class);
 }
@@ -313,4 +297,8 @@ echo html_writer::start_tag('div', array('class' => 'no-overflow'));
 $form->display();
 echo html_writer::end_tag('div');
 
-echo $OUTPUT->footer();
+
+// If we're not using QuickMail from an AJAX div, then output the footer.
+if(!$using_ajax) { 
+    echo $OUTPUT->footer();
+}
