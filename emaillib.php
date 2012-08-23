@@ -61,6 +61,8 @@ abstract class quickmail_email_composer
 
     /**
      * An array of signatures which the user can use.
+     *
+     * @var array
      */
     protected $signatures;
 
@@ -68,7 +70,7 @@ abstract class quickmail_email_composer
     /**
      * An internal MoodleForm which is used to compose the e-mail message.
      * 
-     * @var mixed
+     * @var moodleform
      */
     protected $form = null;
 
@@ -237,6 +239,14 @@ abstract class quickmail_email_composer
         return null;
     }
 
+
+
+    /**
+     * Returns the core editor options for this E-mail composer.
+     * Used by the main e-mail editor and attachments filearea.
+     * 
+     * @return void
+     */
     protected function get_compose_editor_options()
     {
         // Assume the following message options.
@@ -299,7 +309,6 @@ abstract class quickmail_email_composer
     abstract protected function create_message_form();
 
 
-
     /**
      * Loads all of a user's signatures from the database.
      * 
@@ -315,7 +324,6 @@ abstract class quickmail_email_composer
 
     }
 
-   
 
     /**
      * Verifies that the current user has permission to send e-mails using QuickMail.
@@ -332,6 +340,7 @@ abstract class quickmail_email_composer
         }
     }
 
+    
    /**
      * An abstract function which will return true if and only if the e-mail has addressible recipients.
      * 
@@ -379,6 +388,7 @@ abstract class quickmail_email_composer
         }
     }
 
+
     /**
      * Returns true if the user has indicated that the given e-mail is ready to send.
      * 
@@ -394,6 +404,7 @@ abstract class quickmail_email_composer
     
     }
 
+
     /**
      * Returns true if the user has indicated that the given e-mail is ready to send.
      * 
@@ -408,6 +419,7 @@ abstract class quickmail_email_composer
         return ($data && !empty($data->draft));
     
     }
+
 
     /**
      * Returns true iff the user has cancelled submission of the given form.
@@ -426,6 +438,17 @@ abstract class quickmail_email_composer
 
     }
 
+
+    /**
+     * Saves a record of an e-mail which was sent using QuickMail.
+     * Drafts are records which are unsent; 
+     * 
+     * @param stdClass $data        The e-mail data to be commited to the database; contains all of the e-mail's information.
+     * @param string $table_suffix  The table suffix; which indicates the table to which this data will be saved. 
+     * @param mixed $existing_id    The existing database ID, if applicable. If a database ID is provided, the appropriate records
+     *                              will be updated, instead of created. 
+     * @return void
+     */
     protected function save_record($data, $table_suffix = 'log', $existing_id = null) {
     
         // Validate all of the formdata before sending.
@@ -464,6 +487,12 @@ abstract class quickmail_email_composer
         $DB->update_record('block_quickmail_'.$table_suffix, $data);
     }
 
+    /**
+     * Gets the subject line for the e-mail, prefixed with the course name as per the course settings.
+     * 
+     * @param stdClass $data    The e-mail compose form's data; which contains the e-mail's subject.
+     * @return string           The subject line, with prefix added.
+     */
     protected function get_prefixed_subject($data)
     {
         // Determine if we should prepend the course name / prefix to the e-mail subject line.
@@ -600,13 +629,6 @@ abstract class quickmail_email_composer
         // Return the list of errors; if no errors occurred, this will be an empty array.
         return $errors;
     }
-
-
-    protected function save_message_record($data, $table, $existing = null)
-    {
-
-    }
-
 } 
 
 /**
@@ -865,6 +887,11 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
 }
 
 #class quickmail_email_
+
+//TODO: class for:
+//         -from draft
+//         -forward (from history)
+//         -ask instructor (from question attempt)
 
 
 /*
