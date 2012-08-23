@@ -14,8 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-
-
 /**
  * MoodleMail, an extended mechanism to send and recieve e-mail via Moodle.
  *
@@ -25,6 +23,61 @@
  * @copyright 2011, 2012 Louisiana State University; and 2011, 2012 Binghamton University
  * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
  */
+
+// Load the Question Engine, which will be used to handle Ask Instructor messages:
+require_once($CFG->dirroot.'/question/engine/lib.php');
+require_once($CFG->dirroot.'/question/engine/questionusage.php');
+
+/**
+ * Generic exception for errors in QuickMail.
+ * Replaces many uses of print_error with a slightly more specific exception.
+ * 
+ * @uses moodle_exception
+ * @package block_quickmail
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+class moodle_quickmail_exception extends moodle_exception
+{
+}
+
+/**
+ * Virtual "enumeration" which provides the codes which are used to represent 
+ * message views in get data.
+ * 
+ * @package block_quickmail
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+abstract class quickmail_view_type
+{
+    /**
+     * The normal send view, which is assumed if no view type is provided.  
+     */
+    const NORMAL_SEND = '';
+
+    /**
+     * The "sent items" log view, which can be used to send copies of previously sent messages.
+     */
+    const SENT_MAIL = 'log';
+
+    /**
+     * The "draft items" view, which can be used finish a previously saved, but unsent message.   
+     */
+    const DRAFTS = 'drafts';
+
+    /**
+     * The "ask instructor" view, which is designed to allow student to ask questions about course
+     * questions and activities.
+     */
+    const ASK_INSTRUCTOR = 'askinstructor';
+
+ 
+}
 
 
 /**
@@ -48,7 +101,7 @@ abstract class quickmail {
      */
     const PLUGIN_NAME = 'block_quickmail';
 
-    /**
+   /**
      * Local alias of get_string, which automatically assumes the module's name.
      * 
      * @param string $key   The name of the language string to retrieve. 
@@ -567,6 +620,126 @@ abstract class quickmail {
     }
 
 
+    /**
+     * Returns all users who should recieve Ask Instructor messages in the given context.
+     * 
+     * @param context $context  The context for which we're looking.
+     * @return array            An array of user objects.
+     */
+    public static function get_ask_instructor_users($context)  {
+
+        // Get all users with the "recieve ask instructor messages" capability in the course context.
+        return get_users_by_capability($context, 'block/quickmail:recieveaskinstructor', 'u.id, u.firstname, u.lastname, u.email');
+    }
+
+    public static function get_question_data_from_id($id) {
+
+        // Get a reference to the global database connection object.
+        global $DB;
+
+        // Attempt to get data regarding the question attempt from the database.
+        $record = $DB->get_record('question_attempts', array('id' => $id));
+
+        // If we weren't able to load a valid question attempt record for the given ID, then print an error.
+        if($record === false) {
+            return false;
+        }
+
+        // Load the question usage for the given attempt.
+        $quba = question_engine::load_questions_usage_by_activity($record->questionusageid);
+
+        // Ask the usage to fetch the question attempt...
+        $qa = $quba->get_question_attempt($record->slot);
+
+        // ... and the question's context.
+        $context = $quba->get_owning_context();
+
+        // FIXME: Verify that the user can access the QA.
+
+        // Return the usage, the question attempt, and the context.
+        return array($quba, $qa, $context);
+    }
+
+    public static function get_course_id_from_context(context $context) {
+
+        // Get a refernce to the core database object.
+        global $DB;
+
+        // Attempt to get the course context which the $context belongs to.
+        // If $context is a course context, it will be used.
+        $course_context = $context->get_course_context();
+
+        // Get the CourseID from the context.
+        return $course_context->instanceid;
+    }
+
+    public static function get_users_and_mappings(context $context, $course_id, $roles, $group_info, $target_groups = null)
+    {
+        // Get a reference to the currently logged-in user.
+        global $USER;
+
+        // Create three empty arrays: one for the core list of users in the course context, 
+        // and two for mappings which associate user information with the role/group metadata.
+        $users = array();
+        $users_to_roles = array();
+        $users_to_groups = array();
+
+        // Get all users by their role in the given course.
+        $everyone = get_role_users(0, $context, false, 'u.id, u.firstname, u.lastname, u.email, u.mailformat, u.maildisplay, r.id AS roleid', 'u.lastname, u.firstname');
+
+        // For each of the users in the course, get the course and role metadata.
+        foreach ($everyone as $user_id => $user) {
+
+            // Get a list of roles for the active user...
+            $user_roles = get_user_roles($context, $user_id);
+
+            // ... and filter those roles according to the current QuickMail settings.
+            $user_roles = quickmail::filter_roles($user_roles, $roles);
+
+            // Get the list of groups that the target user (not the current user) is in.
+            $user_groups = groups_get_user_groups($course_id, $user_id);
+
+            // If we're not limiting the search scope by a selection of target groups... 
+            if($target_groups == null) {
+    
+                // ... return all of the groups in the course.
+                $group_ids = array_values($user_groups['0']);
+
+            } else {
+
+                // Otherwise, return all groups that match the current filter:
+                $group_ids = array_intersect(array_values($target_groups), array_values($user_groups['0']));
+
+            }
+
+            // If the user belongs to one or more "filtered group", or filtering is off, the user's group metadata is available. 
+            $group_metadata_available = ($group_ids == null) || !empty($group_ids);
+
+            // If the user has one or more filterable roles, then their role metadata is available.
+            $role_metadata_available = !empty($user_roles);
+
+            // If the user is _not_ the current user, we need their metadata.
+            $not_current_user = $user_id != $USER->id;
+
+            // If the user meets all three of the above conditions, add their metadata to the mappings.
+            if ($group_metadata_available && $role_metadata_available && $not_current_user)
+            {
+                // For each of the groups that the user is in (after filtering), add the group info to the user->group mapping.
+                foreach($group_ids as $group_id) {
+                    $users_to_groups[$user_id][] = $group_info[$group_id];
+                }
+
+                // Add each of the user's roles to the user->roles mapping.
+                $users_to_roles[$user_id] = $user_roles;
+
+                // And add the user to the user collection.
+                $users[$user_id] = $user;
+            }
+        }
+
+        // Return the list of users, a users->groups mapping, and a users->roles mapping.
+        return array($users, $users_to_groups, $users_to_roles);
+    }
 
 }
 

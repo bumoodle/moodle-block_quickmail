@@ -5,7 +5,7 @@
 
 $capabilities = array(
 
-    //by default, allow students to ask instructor
+    // Ask instructor permissions; allow the given users to ask the instructor questions using QuickMail.
     'block/quickmail:canaskinstructor' => array(
         'captype' => 'write',
         'contextlevel' => CONTEXT_COURSE,
@@ -17,6 +17,17 @@ $capabilities = array(
             'student' => CAP_ALLOW
         )
     ),
+
+
+    // Recieve ask instructor permissions; any user with this permission with recieve "ask instructor" e-mails.
+    'block/quickmail:recieveaskinstructor' => array(
+        'captype' => 'write',
+        'contextlevel' => CONTEXT_COURSE,
+        'archetypes' => array(
+            'editingteacher' => CAP_ALLOW,
+        )
+    ),
+
 
     'block/quickmail:cansend' => array(
         'captype' => 'write',

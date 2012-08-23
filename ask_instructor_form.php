@@ -43,7 +43,7 @@ require_once($CFG->libdir . '/formslib.php');
  * @author Kyle Temkin <ktemkin@binghamton.edu> 
  * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
  */
-class email_form extends moodleform {
+class ask_instructor_form extends email_form {
 
     /**
      * Format the user's data for display in the "select recipients" box.
@@ -51,15 +51,15 @@ class email_form extends moodleform {
      * @param stdClass $user    The user whose data is to be formatted.
      * @return string           A string which contains the user any any groups that user is in.
      */
-    protected function format_user_name($user) {
-
+    protected function format_user_name($user) 
+    {
         // Get a refernce to the local user => group mapping.
         $users_to_groups =& $this->_customdata['users_to_groups'];
 
-        // If the user isn't in any group...
+        // If the user isn't in any group... 
         if (empty($users_to_groups[$user->id])) {
 
-            // ... identify them as "not in a section"
+            //... identify them as "not in a section"
             $groups = quickmail::_s('no_section');
 
         // Otherwise, sort them by their section:
@@ -134,13 +134,13 @@ class email_form extends moodleform {
         // Include the current user's ID and the course ID.
         $mform->addElement('hidden', 'userid', $USER->id);
         $mform->addElement('hidden', 'courseid', $COURSE->id);
-
-        // Pass through the type and typeid; by default, assume we're sending normal mail.
-        $mform->addElement('hidden', 'type', '');
-        $mform->addElement('hidden', 'typeid', 0);
+        $mform->addElement('hidden', 'courseid', $COURSE->id);
+        
+        //Pass through the type and typeid; by default, assume we're sending normal mail.
+        $mform->addElement('hidden', 'type', 'askinstructor');
+        $mform->addElement('hidden', 'typeid', 0); // TODO
 
         // Add the main components of the form.
-        $this->add_history_links();
         $this->add_mail_from();
         $this->add_mail_to();
         $this->add_message_body();
@@ -153,18 +153,15 @@ class email_form extends moodleform {
      * 
      * @return void
      */
-    protected function add_quickmail_action_buttons() {
-
-        // Get a quick reference to the core form.
+    protected function add_quickmail_action_buttons()
+    {
         $mform =& $this->_form;
 
-        // Add the submit and cancel buttons to a custom group...
         $buttons = array();
         $buttons[] =& $mform->createElement('submit', 'send', quickmail::_s('send_email'));
         $buttons[] =& $mform->createElement('submit', 'draft', quickmail::_s('save_draft'));
         $buttons[] =& $mform->createElement('cancel');
 
-        // ...and add the group to the form.
         $mform->addGroup($buttons, 'buttons', quickmail::_s('actions'), array(' '), false);
 
     }
@@ -176,15 +173,15 @@ class email_form extends moodleform {
      * 
      * @return array    An associtive array of group id => group name for each of the relevant groups; plus two special groups "all" and 0 (not in a group).
      */
-    protected function get_potential_groups() {
+    protected function get_potential_groups()
+    {
+       // If "filter by group" is off, or no groups exist...
+        if(empty($this->_customdata['groups'])) {
 
-        // If "filter by group" is off, or no groups exist...
-        if (empty($this->_customdata['groups'])) {
-
-            // ...initialize the group to an empty array.
+            /// ...initialize the group to an empty array.
             $group_options = array();
 
-        // Otherwise, build a "filter by group" select box.
+        //Otherwise, build a "filter by group" select box.
         } else {
 
             // Always add an "all sections" group as the first element.
@@ -197,7 +194,7 @@ class email_form extends moodleform {
 
         }
 
-        // Always add a "no section" element to the _end_ of the array.
+        // Always add a "no section" element to the _end_ of the array. 
         //
         // (Note that PHP's array behavior means that though this has the lowest index,
         // it's at the end of the array, as it was most recently added.)
@@ -253,9 +250,8 @@ class email_form extends moodleform {
      * @param string $type  The access type, which can be "log" (for sent messages) or "drafts" (for saved but not sent messages).
      * @return moodle_url   The URL of the target page.
      */
-    protected function get_history_url($type) {
-
-        // Get a reference to the current course.
+    protected function get_history_url($type)
+    {
         global $COURSE;
 
         // Build a list of GET parameters for the history URL...
@@ -272,10 +268,10 @@ class email_form extends moodleform {
      * @param string $string_name   The name of the quickmail language string to be used for the link. If null (or not provided), the value of $type will be used.
      * @return void
      */
-    protected function get_history_link($type, $string_name = null) {
-
+    protected function get_history_link($type, $string_name = null)
+    {
         // If no string was provided, use the default link text for the type.
-        if ($string_name === null) {
+        if($string_name === null) {
             $string = quickmail::_s($type);
 
         // Otherwise, get the requested language string.
@@ -287,23 +283,25 @@ class email_form extends moodleform {
         return html_writer::link(self::get_history_url($type), $string);
     }
 
+    
+
     /**
      * Adds the "draft" and "history" links to the current Moodle form.
      * 
      * @return void
      */
-    protected function add_history_links() {
-
+    protected function add_history_links()
+    {
         // Get a quick reference to the current Moodleform.
         $mform =& $this->_form;
 
-        // And create a empty array of link objects to be added.
+        // And create a empty array of link objects to be added.  
         $links = array();
 
         // Add a link to the user's collection of drafts.
         $links[] =& $mform->createElement('static', 'draft_link', '', self::get_history_link('drafts'));
 
-        // And, if the user can send messages, add a link to the messages they've sent.
+        // And, if the user can send messages, add a link to the messages they've sent. 
         if (quickmail::can_send_to_course_participants()) {
             $links[] =& $mform->createElement('static', 'history_link', '', self::get_history_link('log', 'history'));
         }
@@ -312,7 +310,7 @@ class email_form extends moodleform {
         $mform->addGroup($links, 'links', '&nbsp;', array(' | '), false);
 
     }
-
+    
     /**
      * Create an interactive button, for JavaScript use.
      * 
@@ -320,12 +318,12 @@ class email_form extends moodleform {
      * @param string $text  The button's text. If no text is provided, the language string for the ID will be used.
      * @return string       The HTML code for the button.
      */
-    protected function create_interactive_button($id, $text = null) {
-
+    protected function create_interactive_button($id, $text = null)
+    {
         // If no button text was provided, use the language string for the button's ID.
-        if ($text === null) {
+        if($text === null) {
             $text = quickmail::_s($id);
-        }
+        } 
 
         // Create the button object.
         $button = html_writer::empty_tag('input', array('value' => $text, 'type' => 'button', 'id' => $id));
@@ -334,15 +332,8 @@ class email_form extends moodleform {
         return html_writer::tag('p', $button);
     }
 
-    /**
-     * Get the cell for the selection controls, which allow the user to add/remove users as recipients
-     * of the e-mail.
-     * 
-     * @return html_table_cell  A table cell that contains the main add/remove buttons for the "to" select.
-     */
-    protected function get_selection_buttons() {
-
-        // Get a reference to the global output object, which handles the page rendering.
+    protected function get_selection_buttons()
+    {
         global $OUTPUT;
 
         // Add the center add/remove buttons. 
@@ -358,11 +349,6 @@ class email_form extends moodleform {
 
     }
 
-    /**
-     * Get the selection filters, which allow control over which users are recipients of a given e-mail.
-     * 
-     * @return html_table_cell  A table cell that contains the filter dialogs and user list.
-     */
     protected function get_selection_filters() {
 
         // Get an array of potential users and groups for the "target selection" form, and get a list of roles 
@@ -384,57 +370,15 @@ class email_form extends moodleform {
         return $filters;
     }
 
-    /**
-     * Get the recipients box, which stores the current recipients of a given e-mail.
-     * 
-     * @return html_table_cell  A table cell which contains the recipients box.
-     */
     protected function get_recipients_box()
     {
         // Add the main box for the "selected recipients"
         $select_filter = new html_table_cell();
 
-        // HACK alert! The original LSU code breaks paradigm by passing in a selected() array, 
-        // which conatins the postdata from the _mailto_ hidden element. 
-        //
-        // In order to make this _appear_ more paradigmatic, I'm reading the postdata inside of the MoodleForm- 
-        // this will make the MoodleForm appear to be working normally, despite LSU's legacy jQuery hackishness. 
-        //
-        // TODO: Replace me with something more paradigmatic- perhaps a progressive enhancement select box?
-
-        //<hack>
-
-        // Create an array of currently-selected users.
-        $selected = array();
-
-        // Get the value of the submitted "mailto" post-variable.
-        $mail_to = optional_param('mailto', '', PARAM_TEXT);
-
-        // If values were previously seleced, add them to the selected array.
-        if(!empty($mail_to)) {
-
-            // And convert it into an array of User IDs.
-            $selected_ids = explode(',', $mail_to);
-
-            // For each of the selected users, move the user object from the "user pool" to the "selected" pool.
-            foreach($selected_ids as $id) {
-
-                // Add the user to the selected pool...
-                $selected[$id] = $this->_customdata['users'][$id];
-
-                // ... and remove them from the user pool.
-                unset($this->_customdata['users'][$id]);
-
-            }
-        }
-
-        // </endhack>
-
-
         // Build an array of array of users who are currently selected; this is used to restore from drafts.
         // This replaces an array_reduce from the original QuickMail, which was a lot slower.
         $user_list = '';
-        foreach($selected as $user) {
+        foreach($this->_customdata['selected'] as $user) {
             $user_list .= '<option value="'.$this->format_user_details($user).'">'. $this->format_user_name($user).'</option>';
         }
 
@@ -445,11 +389,6 @@ class email_form extends moodleform {
         return $select_filter;
     }
 
-    /**
-     * Returns the interface labels for the recipient select controls.
-     * 
-     * @return html_table_row   A table row which contains the labels for each of the recipient select controls.
-     */
     private function user_select_interface_labels() {
 
         global $OUTPUT;
@@ -471,20 +410,15 @@ class email_form extends moodleform {
 
     }
 
-    /**
-     * Returns the interface elements for the recipient select controls.
-     * 
-     * @return html_table_row   A table row which contains the core interface elements for the recipient select controls.
-     */
     private function user_select_core_interface() {
 
         // Create a new table row, which contains the target recipients.
         //
         return new html_table_row(
             array(
-                self::get_recipients_box(),
-                self::get_selection_buttons(),
-                self::get_selection_filters()
+                $this->get_recipients_box(),
+                $this->get_selection_buttons(),
+                $this->get_selection_filters()
             )
         );
 
@@ -495,27 +429,22 @@ class email_form extends moodleform {
         // Get a quick reference to the active form.
         $mform =& $this->_form;
 
-        // Add a hidden "target users" item, which will store the target user's/users' information.
-        // This field will be automatically populated by JavaScript.
-        $mform->addElement('hidden', 'mailto', '');
+        // Get a list of "Ask Instructor" instructor users.
+        $emails = '';
 
-        // Start a new table, which will house the "user select" form.
-        $table = new html_table();
-        $table->attributes['class'] = 'emailtable';
+        // Get a quick list of all of the user's e-mails.
+        foreach($this->_customdata['instructors'] as $user) {
+            $emails .= '<br />'.fullname($user).' &lt;'. $user->email.'&gt;';
+        }
 
-        // Render the core user selection table.
-        $table->data[] = self::user_select_interface_labels();
-        $table->data[] = self::user_select_core_interface();
+        // Trim the leading '<br />'
+        $emails = substr($emails, 6);
 
-        // Render the "user select" interface. 
-        $mform->addElement('static', 'selectors', '', html_writer::table($table));
+        // Display the "To" e-mail addresse.
+        // TODO: respect the instructor's desire to hide their e-mail if appropriate?
+        $mform->addElement('static', 'mailto', quickmail::_s('to'), $emails);
     }
 
-    /**
-     * Add the send address controls. 
-     * 
-     * @return void
-     */
     protected function add_mail_from()
     {
         // Get a reference to the current user.

@@ -38,6 +38,7 @@ if ($reset) {
 }
 
 $roles = $DB->get_records_menu('role', null, 'sortorder ASC', 'id, name');
+
 $form = new config_form(null, array(
     'courseid' => $courseid,
     'roles' => $roles

@@ -6,6 +6,7 @@ $string['quickmail:canconfig'] = "Allows users to configure MoodleMail instance.
 $string['quickmail:canimpersonate'] = "Allows users to log in as other users and view history.";
 $string['quickmail:allowalternate'] = "Allows users to add an alternate email for courses.";
 $string['quickmail:canaskinstructor'] = "Allows user to message their instructor(s) using MoodleMail.";
+$string['quickmail:recieveaskinstructor'] = "Recieve 'Ask Instructor' e-mails.";
 $string['backup_history'] = 'Include MoodleMail History';
 $string['restore_history'] = 'Restore MoodleMail History';
 $string['overwrite_history'] = 'Overwrite MoodleMail History';
@@ -16,6 +17,7 @@ $string['drafts'] = 'View Drafts';
 $string['history'] = 'View History';
 $string['log'] = $string['history'];
 $string['from'] = 'From';
+$string['to'] = 'To';
 $string['selected'] = 'Selected Recipients';
 $string['add_button'] = 'Add';
 $string['remove_button'] = 'Remove';
@@ -53,19 +55,22 @@ $string['allowstudents'] = 'Allow students to use MoodleMail';
 $string['select_roles'] = 'Roles to filter by';
 $string['reset'] = 'Restore System Defaults';
 
+$string['no_course'] = 'No valid course ID was provided!';
 $string['no_type'] = '{$a} is not in the acceptable type viewer. Please use the applciation correctly.';
 $string['no_email'] = 'Could not email {$a->firstname} {$a->lastname}.';
 $string['no_log'] = 'You have no email history yet.';
 $string['no_drafts'] = 'You have no email drafts.';
-$string['no_subject'] = 'You must have a subject';
-$string['no_course'] = 'Invalid Course with id of {$a}';
+$string['no_subject'] = 'You must provide a subject for the e-mail to be send.';
+$string['no_subject_users'] = 'You must provide a subject and recipient(s) for the e-mail to be send.';
 $string['no_permission'] = 'You do not have permission to send emails with Quickmail.';
 $string['no_users'] = 'There are no users you are capable of emailing.';
 $string['no_selected'] = 'You must select some users for emailing.';
 $string['not_valid'] = 'This is not a valid email log viewer type: {$a}';
+$string['not_valid_course'] = 'Invalid Course with id of {$a}';
 $string['not_valid_user'] = 'You can not view other email history.';
 $string['not_valid_action'] = 'You must provide a valid action: {$a}';
 $string['not_valid_typeid'] = 'You must provide a valid email for {$a}';
+$string['not_valid_askinstructor_id'] = 'An invalid question identifier was passed to the Ask Instructor feature ({$a}).';
 $string['delete_failed'] = 'Failed to delete email';
 $string['required'] = 'Please fill in the required fields.';
 $string['prepend_class'] = 'Prepend Course name';
@@ -112,3 +117,5 @@ received it by mistake. Simply discard this message.
 
 Thank you.
 ';
+
+$string['askinstructor'] = 'Ask Instructor';
