@@ -66,15 +66,25 @@ abstract class quickmail_view_type
     const SENT_MAIL = 'log';
 
     /**
+     *  The "forward" view. which can be used to forward a copy of a previously sent message to another user.
+     */
+    const FORWARD = 'forward';
+
+    /**
      * The "draft items" view, which can be used finish a previously saved, but unsent message.   
      */
-    const DRAFTS = 'drafts';
+    const DRAFT = 'drafts';
 
     /**
      * The "ask instructor" view, which is designed to allow student to ask questions about course
      * questions and activities.
      */
     const ASK_INSTRUCTOR = 'askinstructor';
+
+    /** 
+     * The "ask instructor" view, based off of a quiz question.
+     */
+    const ASK_QUIZ_QUESTION = 'askquizquestion';
 
  
 }
@@ -619,18 +629,6 @@ abstract class quickmail {
         return self::has_capability_in_course('block/quickmail:allowalternate', $user, $course);
     }
 
-
-    /**
-     * Returns all users who should recieve Ask Instructor messages in the given context.
-     * 
-     * @param context $context  The context for which we're looking.
-     * @return array            An array of user objects.
-     */
-    public static function get_ask_instructor_users($context)  {
-
-        // Get all users with the "recieve ask instructor messages" capability in the course context.
-        return get_users_by_capability($context, 'block/quickmail:recieveaskinstructor', 'u.id, u.firstname, u.lastname, u.email');
-    }
 
     public static function get_question_data_from_id($id) {
 

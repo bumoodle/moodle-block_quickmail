@@ -57,7 +57,9 @@ class block_quickmail_email_renderer extends plugin_renderer_base
 
     public function render_email_send_errors($errors) {
 
-        //TODO: rewrite
+        // If no errors have occurred, we don't need to render anything.
+        if(empty($errors))
+            return;
 
         foreach ($errors as $type => $error) {
             echo $this->notification($error, 'notifyproblem');

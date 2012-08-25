@@ -407,8 +407,11 @@ class email_form extends moodleform {
         // Create an array of currently-selected users.
         $selected = array();
 
+        // Compute the "default value", which will be used if no post-data is available.
+        $default_selected = !empty($this->_customdata['mailto']) ? $this->_customdata['mailto'] : '';
+
         // Get the value of the submitted "mailto" post-variable.
-        $mail_to = optional_param('mailto', '', PARAM_TEXT);
+        $mail_to = optional_param('mailto', $default_selected, PARAM_TEXT);
 
         // If values were previously seleced, add them to the selected array.
         if(!empty($mail_to)) {
@@ -536,6 +539,7 @@ class email_form extends moodleform {
         }
 
         // If the user has no alternate addresses that they're _allowed_ to use.. 
+        // TODO: remove
         if (empty($alternates)) {
 
             // .. automatically specify the from address as their primary e-mail.
@@ -579,11 +583,21 @@ class email_form extends moodleform {
         // And add a fire manager, which will allow the user to upload attachments.
         $mform->addElement('filemanager', 'attachments', quickmail::_s('attachment'));
 
-        // Get a list of signatures that the user can use with a "no signature" option appended.
-        $options = array_merge($this->_customdata['sigs'],  array(-1 => quickmail::_s('nosig')));
+        // If the user has a signature available, show the siganature select box.
+        if(!empty($this->_customdata['sigs']))  {
 
-        // And display it to the user as a drop-down box.
-        $mform->addElement('select', 'sigid', quickmail::_s('signature'), $options);
+            // Get a list of signatures that the user can use with a "no signature" option appended.
+            $options = array_merge($this->_customdata['sigs'],  array(-1 => quickmail::_s('nosig')));
+
+            // And display it to the user as a drop-down box.
+            $mform->addElement('select', 'sigid', quickmail::_s('signature'), $options);
+
+        } 
+        // Otherwise, just add a hidden "no signature" element.
+        else {
+            $mform->addElement('hidden', 'sigid', '-1');
+        }
+
 
         // Create a yes/no radio button, which will allow the user to select if they want to recieve a copy.
         $radio = array(

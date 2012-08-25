@@ -134,7 +134,6 @@ class ask_instructor_form extends email_form {
         // Include the current user's ID and the course ID.
         $mform->addElement('hidden', 'userid', $USER->id);
         $mform->addElement('hidden', 'courseid', $COURSE->id);
-        $mform->addElement('hidden', 'courseid', $COURSE->id);
         
         //Pass through the type and typeid; by default, assume we're sending normal mail.
         $mform->addElement('hidden', 'type', 'askinstructor');
@@ -442,7 +441,7 @@ class ask_instructor_form extends email_form {
 
         // Display the "To" e-mail addresse.
         // TODO: respect the instructor's desire to hide their e-mail if appropriate?
-        $mform->addElement('static', 'mailto', quickmail::_s('to'), $emails);
+        $mform->addElement('static', 'mailtolabel', quickmail::_s('to'), $emails);
     }
 
     protected function add_mail_from()

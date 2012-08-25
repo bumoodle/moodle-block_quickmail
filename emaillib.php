@@ -17,11 +17,12 @@
  
 
 /**
- * Generic class for QuickMail e-mail frontends.
+ * A generic class which represents an e-mail composition interface for QuickMail.
  * 
  * @package block_quickmail
  * @version $id$
  * @copyright 2011, 2012 Binghamton University
+ * @copyright 2011, 2012 Louisiana State University
  * @author Kyle Temkin <ktemkin@binghamton.edu> 
  * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
  */
@@ -86,8 +87,8 @@ abstract class quickmail_email_composer
      * @param int $signature_id 
      * @return void
      */
-    public function __construct($course_id, $signature_id = 0, array $message_defaults = array(), $user = null)
-    {
+    public function __construct($course_id, $signature_id = 0, $user = null) {
+
         // Get a reference to the currently logged-in user.
         global $USER;
 
@@ -108,13 +109,25 @@ abstract class quickmail_email_composer
     }
 
     /**
-     * Returns the current context for this e-mailthis->.
+     * Returns the current context for this e-mail.
      * 
      * @return context  Returns the context which owns this e-mail.
      */
     public function get_owning_context() {
 
         return $this->context;
+
+    }
+
+    /**
+     * Returns the _course context_ for this e-mail; which may be different than the core context
+     * if QuickMail is being used inside of a module.
+     * 
+     * @return void
+     */
+    public function get_course_context() {
+
+        return $this->context->get_course_context();
 
     }
 
@@ -126,6 +139,17 @@ abstract class quickmail_email_composer
     public function get_owning_course() {
     
         return $this->course;
+    }
+
+
+    /**
+     * Returns the "header" for the current page; which is used for breadcrumbs and the page header.
+     * 
+     * @return string   The header text which describes the function of the current page.
+     */
+    public function get_header_string() {
+
+        return get_string('composenew', 'block_quickmail');
     }
 
     
@@ -257,29 +281,26 @@ abstract class quickmail_email_composer
             'maxfiles' => EDITOR_UNLIMITED_FILES,
             'context' => $this->context,
         );
-
-
     }
 
 
     /**
-     * Creates a file area for the attachments. 
+     * Initializes the internal compose e-mail form.
      * 
-     * @param boolean $always   If false, then an existing file area will be used, if one exists. If true, a file area will always be created; and any previous filearea will be discarded.
      * @return void
      */
-    protected function create_attachment_area($always = false) {
+    protected function initialize_form() {
 
         // Get the core form data for the e-mail send form.
         $data = $this->form->get_data();
 
-        // If no form data exists, then create a new data object.
+        // If no form data exists, then use the form's defaults.
         if(!$data) {
-            $data = new stdClass;
+            $data = $this->get_initial_form_value();
         }
 
         // If no existing attachement file area exists, create a new draft filearea for attachments.
-        if (empty($data->attachments) || $always) {
+        if (empty($data->attachments)) {
 
             // Get the draft item ID associated with the attachment file manager, if files have already been uploaded.
             $attachid = file_get_submitted_draft_itemid('attachment');
@@ -290,20 +311,43 @@ abstract class quickmail_email_composer
             // If we just created a draft file area for the files, associate it with the form.
             $data->attachments = $attachid;
 
-            // Pass the updated attachment data back into the form.
-            // TODO: Find a better way to do this?
-            $this->form->set_data($data);
         }
+
+        // Create a draft area, which stores any inline images or files which are linked inline.
+        $data = file_prepare_standard_editor($data, 'message', $this->get_compose_editor_options(), $this->context, 'block_quickmail', $this->get_file_area(), $this->get_file_id());
+
+        // Pass the updated attachment data back into the form.
+        // TODO: Find a better way to do this?
+        $this->form->set_data($data);
 
     }
 
 
     /**
-     * Creates a "Compose Message" MoodleForm 
+     * Returns an object which contains all of the form's defaults.
      * 
-     * @param mixed $action 
-     * @param mixed $customdata 
-     * @access public
+     * @return object   An object which contains all of the form's defaults; suitable for use with the relevant moodleform's set_data method.
+     */
+    protected function get_initial_form_value()
+    {
+        // Create a new empty object, which will story each of the form's defaults.
+        $data = new stdClass();
+
+        // And specify the base defaults: every field is empty, and the user's message format is the same as their preferred mail format.
+        $data->id = null;
+        $data->subject = '';
+        $data->message = '';
+        $data->mailto = '';
+        $data->format = $this->user->mailformat;
+
+        // Return the newly created defaults.
+        return $data;
+    }
+
+
+    /**
+     * Creates a "Compose Message" MoodleForm, which provides the primary interface for the user to compose an e-mail message.
+     * 
      * @return void
      */
     abstract protected function create_message_form();
@@ -347,7 +391,7 @@ abstract class quickmail_email_composer
      * @access public
      * @return boolean  True iff the current composer can address recipients.
      */
-    public abstract function potential_recipients_exist();
+    abstract public function potential_recipients_exist();
 
 
     /**
@@ -372,7 +416,7 @@ abstract class quickmail_email_composer
 
         // Determine if recipients and a subject were provided.
         $no_subject = empty($data->subject);
-        $no_users = empty($data->mailto);
+        $no_users = $this->get_recipients($data) == false;
 
         //If neither was provided, throw an exception.
         if($no_subject && $no_users) {
@@ -384,7 +428,7 @@ abstract class quickmail_email_composer
             throw new moodle_quickmail_exception('no_subject', 'block_quickmail');     
         } 
         if($no_users) {
-            throw new moodle_quickmail_exception('no_users', 'block_quickmail');     
+            throw new moodle_quickmail_exception('no_selected', 'block_quickmail');     
         }
     }
 
@@ -451,11 +495,14 @@ abstract class quickmail_email_composer
      */
     protected function save_record($data, $table_suffix = 'log', $existing_id = null) {
     
+        // Get a reference to the global database object.
+        global $DB;
+
         // Validate all of the formdata before sending.
         $this->validate_data(); 
 
-        // Get a reference to the global database object.
-        global $DB;
+        // Prepare the data for saving in the database.
+        $this->prepare_for_save($data);
 
         // Get the format and message from the HTML editor...
         $data->format = $data->message_editor['format'];
@@ -468,11 +515,11 @@ abstract class quickmail_email_composer
         if($existing_id !== null) {
 
             // ... then, update the existing record.
-            $data->id = $typeid;
+            $data->id = $existing_id;
             $DB->update_record('block_quickmail_'.$table_suffix, $data);
 
         } else {
-            
+
             // Otherwise, add a new data row to the database.
             $data->id = $DB->insert_record('block_quickmail_'.$table_suffix, $data);
         }
@@ -536,6 +583,14 @@ abstract class quickmail_email_composer
         $data->message .= $signaturetext;
     }
 
+    /**
+     * Save a 'draft' record of an e-mail, which can later be resumed and sent.
+     * 
+     * @param int $existing_id      If provided, the draft with the given ID will be updated.
+     * @param bool $update_form     If true, the form's data will be updated according to the modifications made during the send process- 
+     *                              e.g. the appending of the signature. Be careful if you se this to false- as the internal file areas may not be properly updated.
+     * @return void
+     */
     public function save_draft($existing_id = null, $update_form = true) {
 
         // Get the message information, as submitted by the user.
@@ -545,19 +600,20 @@ abstract class quickmail_email_composer
         $data->time = time();
 
         // Save record of the e-mail to be sent in the database.
-        $this->save_record($data, 'draft', $existing_id);
+        $this->save_record($data, quickmail_view_type::DRAFT, $existing_id);
 
         // If $update_form is set, then migrate any data changes back to the core form.
         if($update_form) {
-            $this->form_set_data($data);
+            $this->form->set_data($data);
         }
     }
 
 
     /**
-     * Send the message which was composed in this 
+     * Send the message which was composed using this QuickMail composer.
      * 
-     * @param bool $update_form     If true, the form's data will be updated according to the modifications made during the send process- e.g. the appending of the signature. Be careful if you se this to false- as the internal file areas may not be properly updated.
+     * @param bool $update_form     If true, the form's data will be updated according to the modifications made during the send process- 
+     *                              e.g. the appending of the signature. Be careful if you se this to false- as the internal file areas may not be properly updated.
      * @return void
      */
     public function send_message($update_form = true) {
@@ -597,17 +653,17 @@ abstract class quickmail_email_composer
         $data->message = file_rewrite_pluginfile_urls($data->message, 'pluginfile.php', $this->context->id, 'block_quickmail', 'log', $data->id, $this->get_compose_editor_options());
 
         // Get a list of selected users.
-        $recipients = explode(',', $data->mailto);
+        $recipients = $this->get_recipients($data);
 
          // Send a message to each of the listed users.
-        foreach ($recipients as $userid) {
+        foreach ($recipients as $recipient) {
 
             // Send the actual e-mail. Replace me with a local function that handles the reply-to functionality.
-            $success = email_to_user($this->users[$userid], $this->user, $subject, strip_tags($data->message), $data->message, $zip, $zipname);
+            $success = email_to_user($recipient, $this->user, $subject, strip_tags($data->message), $data->message, $zip, $zipname);
 
             // If transmission to a given user failed, record the error.
             if(!$success) {
-                $errors[] = get_string("no_email", 'block_quickmail', $user_pool[$userid]);
+                $errors[] = get_string("no_email", 'block_quickmail', $recipient);
             }
         }
 
@@ -629,11 +685,60 @@ abstract class quickmail_email_composer
         // Return the list of errors; if no errors occurred, this will be an empty array.
         return $errors;
     }
+
+    /**
+     * Returns a collection of recipients who have been selected by the given user.
+     * 
+     * @param stdClass $data    The form-data to be parsed.
+     * @return array            An array of user IDs
+     */
+    protected function get_recipients($data) {
+
+        // Start a new array of recipients.
+        $recipients = array();
+
+        // And break the "mail-to" string into a list of recipients.
+        $recipient_ids =  explode(',', $data->mailto);
+
+        // For each of the recipients in the mail-to string, attempt to get the user's information.
+        foreach($recipient_ids as $id) {
+
+            // If the user is in the local pool of possible recipients, the user has the ability to message them; and they should be added to
+            // the recipients list.
+            if(array_key_exists($id, $this->users)) {
+                $recipients[$id] = $this->users[$id]; 
+            }
+            // Otherwise, the user doesn't have permission to access the given user; throw an exception.
+            else {
+                throw new moodle_quickmail_exception('no_permission_user', 'block_quickmail');
+            }
+        }
+
+        // Return the newly created list of recipients.
+        return $recipients;
+    }
+
+    /**
+     * Prepares the given e-mail data for storage in the Moodle database.
+     * Modifies the data object in place.
+     * 
+     * @return void
+     */
+    protected function prepare_for_save($data) {
+
+        // Get the list of recipients that the user has selected, minus any recipients that the user
+        // is not allowed to message. (This prevents a user from modifying the mailto postvar to get user information.)
+        $recipients = $this->get_recipients($data);
+
+        // Ensure that the mailto field matches the list of recipients.
+        $data->mailto = implode(',', array_keys($recipients));
+    }
+
 } 
 
 /**
- * Class which represents e-mails which have "selectable" recipients- the primary 
- * operating mode of QuickMail.
+ * Class which represents an e-mail composition interface which allows the user to select recipients
+ * from their classes. This class represents the primary operating mode of QuickMail.
  * 
  * @uses quickmail
  * @uses _email
@@ -691,10 +796,10 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
      * @param int $signature_id 
      * @return void
      */
-    public function __construct($course_id, $signature_id = 0)
+    public function __construct($course_id, $signature_id = 0, $user = null)
     {
         // Call the parent constructor to set up the main QuickMail information.
-        parent::__construct($course_id, $signature_id);
+        parent::__construct($course_id, $signature_id, $user);
 
         // And load the additional information used to filter recipients.
         $this->load_roles();
@@ -880,23 +985,513 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
         // Create the e-mail composition form.
         $this->form = new email_form(null, $data);
 
-        // Create an attachement area for this message, if necessary.
-        $this->create_attachment_area();
+        // Initialize the Moodleform to the default data provided.
+        $this->initialize_form();
     }
 
 }
 
-#class quickmail_email_
+/**
+ * A class representing an e-mail composition interface which is designed to re-create 
+ * an e-mail from a database record. Suitable as a base for forwarding, replying, or continuing from a draft.
+ * 
+ * @uses quickmail
+ * @uses _email_composer_selectable
+ * @package 
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+class quickmail_email_composer_from_existing extends quickmail_email_composer_selectable {
 
-//TODO: class for:
-//         -from draft
-//         -forward (from history)
-//         -ask instructor (from question attempt)
+
+    /**
+     *  Indicates the code for a lack of a signature.
+     */
+    const NO_SIGNATURE = -1;
 
 
-/*
+    /**
+     * The record from which this e-mail composer was created. 
+     * 
+     * @var int
+     */
+    protected $record;
+
+
+    /**
+     * Stores the "view type" that the record was created from.
+     * 
+     * @var int     A member of the quickmail_view_type "enumeration".
+     */
+    protected $type;
+
+
+    /**
+     * Creates a new QuickMail message composer object from an existing saved e-mail,
+     * like a draft message, or previously sent message.
+     * 
+     * @param int $record_id    The ID number of the e-mail record to be loaded.
+     * @param string $type      The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
+     * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
+     * @return void
+     */
+    public function __construct($record_id, $type = quickmail_view_type::DRAFT, $user = null) {
+
+        // Get a reference to the global database object.
+        global $DB;
+
+        // Attempt to load the saved message data from the database.
+        $this->record = $DB->get_record('block_quickmail_'.$type, array('id' => $record_id));
+
+        // If we weren't able to load the record from the database, throw an error.
+        if($this->record === false) {
+            throw new moodle_quickmail_exception('not_valid_typeid', 'block_quickmail', $record_id);
+        }
+
+        // Process the record data, as it was retrieved from the database.
+        $this->preprocess_data_record();
+
+        // Save the "view type", which specifies which table we're loading the data from.
+        $this->type = $type;
+
+        // Call the parent constructor to complete the creation of the e-mail composer.
+        parent::__construct($this->record->courseid, self::NO_SIGNATURE, $user);
+
+    }
+
+    /**
+     * Processes the data which was restored from the database, converting it to a form suitable for use in the
+     * internal composition form.
+     * 
+     * @return void
+     */
+    protected function preprocess_data_record() {
+
+        //Convert the stored format and message into a format which is compatible with the modern Moodleform.
+        $this->record->messageformat = $this->record->format;
+        $this->record->messagetext = $this->record->message;
+    }
+
+
+    /**
+     * Returns the default file area which will store the message to be composed.
+     * 
+     * @return void
+     */
+    protected function get_file_area() {
+        return $this->type;
+    }
+
+    /**
+     * Returns the itemid for the existing file areas; if appropriate.
+     * 
+     * @return void
+     */
+    protected function get_file_id() {
+        return $this->record->id;
+    }
+
+
+
+
+     /**
+     * Creates a MoodleForm which will represent the e-mail message to be sent.
+     * 
+     * @return void
+     */
+    protected function create_message_form()
+    {
+        // Gather the data which will be passed to the e-mail composition form.
+        $data = array(
+            'editor_options' => $this->get_compose_editor_options(),
+            'users' => $this->users,
+            'roles' => $this->roles,
+            'groups' => $this->groups,
+            'users_to_roles' => $this->users_to_roles,
+            'users_to_groups' => $this->users_to_groups,
+            'alternates' => array(), //$alternates
+            'mailto' => $this->record->mailto
+        );
+
+        // Create the e-mail composition form.
+        $this->form = new email_form(null, $data);
+
+        // Populate the form with the existing data loaded from the database.
+        $this->form->set_data($this->record);
+
+        // Initialize the Moodleform to the data retrieved from the database.
+        $this->initialize_form();
+    }
+
+    /**
+     * Returns an object which contains all of the form's default values, as restored from the database.
+     * 
+     * @return object   An object which contains all of the form's defaults; suitable for use with the relevant moodleform's set_data method.
+     */
+    protected function get_initial_form_value()
+    {
+        // Return the data loaded from the database.
+        return $this->record;
+    }
+
+
+
+
+
+}
+
+/**
+ * An e-mail composition interface which is designed to handle e-mails which are being re-created from a 
+ * previous draft.
+ * 
+ * @uses quickmail_email_composer_from_existing
+ * @package 
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+class quickmail_email_composer_from_draft extends quickmail_email_composer_from_existing {
+
+    /**
+     * Creates a new QuickMail message composer object from an existing saved draft. 
+     * A convenience shorthand for quickmail_email_composer_from_existing.
+     * 
+     * @param int $record_id    The ID number of the e-mail record to be loaded.
+     * @param string $type      The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
+     * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
+     * @return void
+     */
+    public function __construct($record_id, $user = null) {
+
+        // Call the parent constructor to complete the creation of the e-mail composer.
+        parent::__construct($record_id, quickmail_view_type::DRAFT, $user);
+
+    }
+
+
+}
+
+/**
+ * An e-mail composition interface which is designed to handle the forwarding of an existing e-mail.
+ * 
+ * @uses quickmail_email_composer_from_existing
+ * @package 
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+class quickmail_email_composer_forward extends quickmail_email_composer_from_existing {
+
+    /**
+     * Creates a new QuickMail message composer object from an existing message.
+     * A convenience shorthand for quickmail_email_composer_from_existing.
+     * 
+     * @param int $record_id    The ID number of the e-mail record to be loaded.
+     * @param string $type      The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
+     * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
+     * @return void
+     */
+    public function __construct($record_id, $user = null) {
+
+        // Call the parent constructor to complete the creation of the e-mail composer.
+        parent::__construct($record_id, quickmail_view_type::SENT_MAIL, $user);
+
+    }
+
+
+     /**
+     * Processes the data which was restored from the database, converting it to a form suitable for use in the
+     * internal composition form.
+     * 
+     * @return void
+     */
+    protected function preprocess_data_record() {
+
+        //Perform the core preprocessing for an e-mail restored from the database.
+        parent::preprocess_data_record();
+
+        //And add 'Fwd:' to the message's subject line.
+        $this->record->subject = get_string('fwd', 'block_quickmail').': '.$this->record->subject;
+    }
+
+
+    /**
+     * Returns the "header" for the current page; which is used for breadcrumbs and the page header.
+     * 
+     * @return string   The header text which describes the function of the current page.
+     */
+    public function get_header_string() {
+        return get_string('forward', 'block_quickmail');
+    }
+
+
+
+
+}
+
+/**
+ * An e-mail composition form which is designed to allow a student to e-mail their instructor.
+ * 
+ * @uses quickmail
+ * @uses _email_composer
+ * @package 
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
 class quickmail_email_composer_ask_instructor extends quickmail_email_composer
 {
 
+
+    /**
+     * Stores an array of users who can recieve ask instructor messages; or null to indicate that the data has not yet been retrieved from the database.
+     * Since requesting users with a capability is an expensive call, this data is only retrieved on request; and cached here thereafter. 
+     *
+     * Use get_ask_instructor_users() to read the value of this variable instead.
+     * 
+     * @var array
+     */
+    protected $instructors = null;
+
+    /**
+     * Returns all users who should recieve Ask Instructor messages in the given context.
+     * 
+     * @return array            An array of user objects.
+     */
+    protected function get_ask_instructor_users()  {
+
+        // If we don't already have a cached list of Ask Instructor instructors, then retrieve the user list from the database.
+        if($this->instructors === null) {
+            $this->instructors = get_users_by_capability($this->context, 'block/quickmail:recieveaskinstructor', 'u.id, u.firstname, u.lastname, u.email');
+        }
+
+        // Return the list of instructors who should recieve Ask Instructor users in this context.
+        return $this->instructors;
+    }
+
+
+    /**
+     * Creates a MoodleForm which will represent the e-mail message to be sent.
+     * 
+     * @return void
+     */
+    protected function create_message_form()
+    {
+        // Gather the data which will be passed to the e-mail composition form.
+        // TODO: Pass it a reference to the current object instead?
+        $data = array(
+            'editor_options' => $this->get_compose_editor_options(),
+            'instructors' => $this->get_ask_instructor_users(), 
+            'sigs' => array_map(function($sig) { return $sig->title; }, $this->signatures),
+            'alternates' => array(), //$alternates
+        );
+
+        // Create the e-mail composition form.
+        $this->form = new ask_instructor_form(null, $data);
+
+        // Initialize the Moodleform to the default data provided.
+        $this->initialize_form();
+    }
+
+
+    /**
+     * A function which will return true if and only if the e-mail has addressible recipients.
+     * 
+     * @access public
+     * @return boolean  True iff the current composer can address recipients.
+     */
+    public function potential_recipients_exist() {
+
+        // Return true if there is at least one user who should recieve Ask Instructor messages.
+        return count($this->get_ask_instructor_users()) > 0;
+
+    }
+
+    /**
+     * Verifies that the current user has permission to send e-mails using QuickMail.
+     *
+     * @throws moodle_quickmail_exception   Throws an exception if the user does not have sufficient priveleges to use QuickMail. 
+     * @return void
+     */
+    protected function verify_permissions() {
+
+        // The user can send e-mails using this default base class iff they have the 'cansend' capability.
+        // If they don't, throw an exception
+        if(!has_capability('block/quickmail:canaskinstructor', $this->context)) {
+            throw new moodle_quickmail_exception('no_permission', 'block_quickmail');
+        }
+    }
+
+    /**
+     * Returns a collection of recipients who have been selected by the given user.
+     * 
+     * @param stdClass $data    The form-data to be parsed.
+     * @return array            An array of user IDs
+     */
+    protected function get_recipients($data) {
+
+        // In Ask Instructor mode, the recipients are always equal to the list of Ask Instructor users.
+        return $this->get_ask_instructor_users();
+
+    }
 }
+
+
+/**
+ * An e-mail composition form which is designed to allow a student to ask a question regarding a
+ * Quiz question.
+ * 
+ * @package 
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
  */
+class quickmail_email_composer_quiz_question extends quickmail_email_composer_ask_instructor
+{
+
+    /**
+     * The Questions Usage By Activity that owns the quiz question about which this message is being written.
+     * 
+     * @var mixed
+     */
+    protected $quba;
+
+
+    /**
+     * The Question Attempt from which the user clicked "Ask Instructor".
+     * 
+     * @var mixed
+     */
+    protected $question_attempt;
+
+
+    /**
+     * The question number, for display. 
+     * 
+     * @var mixed
+     */
+    protected $number;
+
+
+
+    /**
+     * Creates a new QuickMail e-mail object. 
+     * 
+     * @param int $course_id        The course ID which this 
+     * @param int $signature_id 
+     * @return void
+     */
+    public function __construct($attempt_id, $number = null, $user = null) {
+
+        // Get a reference to the currently logged-in user; and the global database connection.
+        global $DB, $USER;
+
+        // Set the active user. If no user was provided, then use the currently logged-in user. 
+        $this->user = ($user === null) ? $USER : $user;
+
+        // Attempt to get data regarding the question attempt from the database.
+        $record = $DB->get_record('question_attempts', array('id' => $attempt_id));
+
+        // If we weren't able to load a valid question attempt record for the given ID, then print an error.
+        if($record === false) {
+            throw new moodle_quickmail_exception('not_valid_askinstructor_id', 'block_quickmail', $attempt_id);
+        }
+
+        // Load the question usage for the given attempt.
+        $this->quba = question_engine::load_questions_usage_by_activity($record->questionusageid);
+
+        // Ask the usage to fetch the question attempt...
+        $this->question_attempt = $this->quba->get_question_attempt($record->slot);
+
+        // And create the context in which this e-mail will be sent.
+        $this->create_context();
+
+        // Set the current course from the given context. 
+        $this->set_course_by_context($this->context);
+
+        // Verify that the active user has permission to send e-mails using QuickMail.
+        $this->verify_permissions();
+
+        // And load the current user's signatures.
+        $this->load_signatures();
+    }
+
+     /**
+     * Creates the local context field from the known question information.
+     * 
+     * @return void
+     */
+    protected function create_context() {
+
+        // Get the context in which this question was asked, by "tracing up" the following chain:
+        // We've already found the QUBA that owns the Question Attempt; the context for this question is the same context that owns the QUBA.
+        $this->context = $this->quba->get_owning_context();
+
+    }
+
+    /**
+     * Set the Course from which this e-mail is being sent via context.
+     * 
+     * @param context $context      The context from which the owning course will be set. If no context
+     *                              is provided, the object's owning context will be used.
+     * @return void
+     */
+    public function set_course_by_context($context = null) {
+
+        // If no context was provided, use the context which owns this composer.
+        if($context === null) {
+            $context = $this->context;
+        }
+        // Attempt to get the course context which the $context belongs to.
+        // If $context is a course context, it will be used.
+        $course_context = $context->get_course_context();
+
+        // Get the CourseID from the context, and use it to set the current course.
+        $this->set_course_by_id($course_context->instanceid);
+    }
+
+    /**
+     * Returns an appropriate subject line for the Ask Instructor e-mail.
+     * 
+     * @return void
+     */
+    protected function get_subject_line()
+    {
+
+    }
+
+
+    /**
+     * Creates a MoodleForm which will represent the e-mail message to be sent.
+     * 
+     * @return void
+     */
+    protected function create_message_form()
+    {
+        // Gather the data which will be passed to the e-mail composition form.
+        // TODO: Pass it a reference to the current object instead?
+        $data = array(
+            'editor_options' => $this->get_compose_editor_options(),
+            'instructors' => $this->get_ask_instructor_users(), 
+            'subject' => $this->get_subject_line(),
+            'sigs' => array_map(function($sig) { return $sig->title; }, $this->signatures),
+            'alternates' => array(), //$alternates
+        );
+
+        // Create the e-mail composition form.
+        $this->form = new ask_instructor_form(null, $data);
+
+        // Initialize the Moodleform to the default data provided.
+        $this->initialize_form();
+    }
+
+
+   
+
+}

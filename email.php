@@ -43,24 +43,46 @@ $type = optional_param('type', '', PARAM_ALPHA);
 $typeid = optional_param('typeid', 0, PARAM_INT);
 $sigid = optional_param('sigid', 0, PARAM_INT);
 $using_ajax = optional_param('ajax', 0, PARAM_BOOL);
-$id = optional_param('id', 0, PARAM_INT);
 
 // Create a new e-mail object according to which $type we've recieved.
 switch($type)
 {
+
+    // If the "continue draft" option is selected, then continue a draft message.
+    case quickmail_view_type::DRAFT:
+        $composer = new quickmail_email_composer_from_draft($typeid);
+        break;
+
+    // If the "foward" option is selected (which was called "log" in legacy QuickMail).
+    case quickmail_view_type::SENT_MAIL:
+    case quickmail_view_type::FORWARD:
+        $composer = new quickmail_email_composer_forward($typeid);
+        break;
+
+    // If the user has entered the page using an "Ask Instructor" link from a course page...
+    case quickmail_view_type::ASK_INSTRUCTOR:
+        $composer = new quickmail_email_composer_ask_instructor($courseid, $sigid);
+        break;
+
+    // If the user has entered the page via an "Ask Instructor" link in a quiz question...
+    case quickmail_view_type::ASK_QUIZ_QUESTION:
+        $composer = new quickmail_email_composer_quiz_question($typeid);
+        break;
+
+    // If no other applicable view has been selected, use the normal "compose" view. 
     default:
         $composer = new quickmail_email_composer_selectable($courseid, $sigid);
+        break;
 
 }
 
 // Get a quick reference to the current plugin name and header string...
 $blockname = quickmail::_s('pluginname');
-$header = quickmail::_s('email');
+$header = $composer->get_header_string();
 
 // ... and set up the report page.
-//TODO: abstract the header name to the composer object?
 $PAGE->set_course($composer->get_owning_course());
-$PAGE->set_context($composer->get_owning_context());
+$PAGE->set_context($composer->get_course_context());
 $PAGE->navbar->add($blockname);
 $PAGE->navbar->add($header);
 $PAGE->set_title($blockname . ': '. $header);
@@ -81,27 +103,6 @@ if (!$composer->potential_recipients_exist()) {
 if ($composer->cancel_requested()) {
    $output->render_email_cancel_handler($composer);
 }
-
-
-// If we're creating a new message from a sent message, or resuming a draft...
-//if (in_array($type, array(quickmail_view_type::SENT_MAIL, quickmail_view_type::DRAFTS))) {
-
-    // ... then load the current message from the database.
-//    $email = $DB->get_record('block_quickmail_'.$type, array('id' => $typeid));
-
-// Or, if we're using the ask instructor feature, populate the e-mail data from the specified type_id.
-//} elseif ($type === quickmail_view_type::ASK_INSTRUCTOR) {
-
-    //TODO
-
-
-// Some setters for the form
-
-/** TODO
-$email->type = $type;
-$email->typeid = $typeid;
-*/
-
 
 // Create a new array which will store any errors which occur during send.
 $errors = array();
@@ -132,28 +133,26 @@ catch(moodle_quickmail_exception $e) {
 }
 
 
-// If no errors occured, then finish the form submission action.
-if (empty($errors)) {
-
-    // If we just finished sending an e-mail, 
-    if ($composer->send_requested()) {
+// If we just finished successfully sending an e-mail message...
+if (empty($errors) && $composer->send_requested()) {
 
         // ... then redirect the user to their "outbox". 
         redirect($composer->get_success_destination());
+} 
 
-    } 
-    // Otherwise, if the user requested that changes be saved as a draft...
-    elseif ($composer->save_requested()) {
 
-        // ... render the "changes saved" message and continue.
-        $this->render_draft_change_saved_message();
-
-    }
-}
 
 // Render the page header...
 echo $output->header();
-echo $output->heading($blockname);
+echo $output->heading($blockname.': '.$header);
+
+// If the user requested that changes be saved as a draft...
+if (empty($errors) && $composer->save_requested()) {
+
+        // ... render the "changes saved" message and continue.
+        $output->render_draft_saved_notification();
+
+}
 
 // Render the list of errors that occurred during e-mail sending.
 $output->render_email_send_errors($errors);
