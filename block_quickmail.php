@@ -91,22 +91,40 @@ class block_quickmail extends block_list {
 
 
         $config = quickmail::load_config($COURSE->id);
-        $permission = has_capability('block/quickmail:cansend', $context);
 
-        $can_send = ($permission or !empty($config['allowstudents']));
+        // Determine if the given user can send e-mail messages...
+
+        // ... to thier peers:
+        $can_compose = has_capability('block/quickmail:cansend', $context);
+        
+        // ... and to their instructor:
+        $can_ask_instructor = has_capability('block/quickmail:canaskinstructor', $context);
 
         $icon_class = array('class' => 'icon');
 
-        if ($can_send) {
+        // If the user can send e-mail messages, grant them access to the composition-related settings:
+        if ($can_compose || $can_ask_instructor) {
             $cparam = array('courseid' => $COURSE->id);
 
-            $send_email_str = quickmail::_s('composenew');
-            $send_email = html_writer::link(
-                new moodle_url('/blocks/quickmail/email.php', $cparam),
-                $send_email_str
-            );
-            $this->content->items[] = $send_email;
-            $this->content->icons[] = $OUTPUT->pix_icon('i/email', $send_email_str, 'moodle', $icon_class);
+            if($can_compose) {
+                $send_email_str = quickmail::_s('composenew');
+                $send_email = html_writer::link(
+                    new moodle_url('/blocks/quickmail/email.php', $cparam),
+                    $send_email_str
+                );
+                $this->content->items[] = $send_email;
+                $this->content->icons[] = $OUTPUT->pix_icon('i/email', $send_email_str, 'moodle', $icon_class);
+            }
+
+            if($can_ask_instructor) {
+                $send_email_str = quickmail::_s('messageinstructor');
+                $send_email = html_writer::link(
+                    new moodle_url('/blocks/quickmail/email.php', array('courseid' => $COURSE->id, 'type' => 'askinstructor')),
+                    $send_email_str
+                );
+                $this->content->items[] = $send_email;
+                $this->content->icons[] = $OUTPUT->pix_icon('i/email', $send_email_str, 'moodle', $icon_class);
+            }
 
             $signature_str = quickmail::_s('signature');
             $signature = html_writer::link(
@@ -134,6 +152,7 @@ class block_quickmail extends block_list {
             $this->content->icons[] = $OUTPUT->pix_icon('history', $history_str, 'block_quickmail', $icon_class);
         }
 
+        /*
         if (has_capability('block/quickmail:allowalternate', $context)) {
             $alt_str = quickmail::_s('alternate');
             $alt = html_writer::link(
@@ -144,6 +163,7 @@ class block_quickmail extends block_list {
             $this->content->items[] = $alt;
             $this->content->icons[] = $OUTPUT->pix_icon('i/settings', $alt_str, 'moodle', $icon_class);
         }
+         */
 
         if (has_capability('block/quickmail:canconfig', $context)) {
             $config_str = quickmail::_s('config');

@@ -41,8 +41,16 @@ require_login();
 $courseid = optional_param('courseid', -1, PARAM_INT);
 $type = optional_param('type', '', PARAM_ALPHA);
 $typeid = optional_param('typeid', 0, PARAM_INT);
-$sigid = optional_param('sigid', 0, PARAM_INT);
-$using_ajax = optional_param('ajax', 0, PARAM_BOOL);
+$sigid = optional_param('sigid', quickmail_email_composer::DEFAULT_SIGNATURE, PARAM_INT);
+$number = optional_param('number', -1, PARAM_INT);
+
+// Create an array of parameters which will be included in subsequent queries.
+$request_parameters = array(
+        'type' => $type,
+        'typeid' => $typeid,
+        'number' => $number
+    );
+
 
 // Create a new e-mail object according to which $type we've recieved.
 switch($type)
@@ -50,28 +58,31 @@ switch($type)
 
     // If the "continue draft" option is selected, then continue a draft message.
     case quickmail_view_type::DRAFT:
-        $composer = new quickmail_email_composer_from_draft($typeid);
+        $composer = new quickmail_email_composer_from_draft($typeid, $request_parameters);
         break;
 
     // If the "foward" option is selected (which was called "log" in legacy QuickMail).
     case quickmail_view_type::SENT_MAIL:
     case quickmail_view_type::FORWARD:
-        $composer = new quickmail_email_composer_forward($typeid);
+        $composer = new quickmail_email_composer_forward($typeid, $request_parameters);
         break;
 
     // If the user has entered the page using an "Ask Instructor" link from a course page...
     case quickmail_view_type::ASK_INSTRUCTOR:
-        $composer = new quickmail_email_composer_ask_instructor($courseid, $sigid);
+        $composer = new quickmail_email_composer_ask_instructor($courseid, $sigid, $request_parameters);
         break;
 
     // If the user has entered the page via an "Ask Instructor" link in a quiz question...
     case quickmail_view_type::ASK_QUIZ_QUESTION:
-        $composer = new quickmail_email_composer_quiz_question($typeid);
+        $composer = new quickmail_email_composer_quiz_question($typeid, $number, $request_parameters);
         break;
 
     // If no other applicable view has been selected, use the normal "compose" view. 
     default:
-        $composer = new quickmail_email_composer_selectable($courseid, $sigid);
+
+        // Create a composer according to the user's permission level- this will either create a new selectable-recipient composer, 
+        // an ask-instructor style composer.
+        $composer = quickmail_email_composer::create_according_to_permissions($courseid, $sigid, $request_parameters, null, true);
         break;
 
 }

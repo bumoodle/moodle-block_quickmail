@@ -39,8 +39,21 @@ require_once($CFG->dirroot.'/question/engine/questionusage.php');
  * @author Kyle Temkin <ktemkin@binghamton.edu> 
  * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
  */
-class moodle_quickmail_exception extends moodle_exception
-{
+class moodle_quickmail_exception extends moodle_exception {
+}
+
+/**
+ * Generic exception for errors in QuickMail.
+ * Replaces many uses of print_error with a slightly more specific exception.
+ * 
+ * @uses moodle_exception
+ * @package block_quickmail
+ * @version $id$
+ * @copyright 2011, 2012 Binghamton University
+ * @author Kyle Temkin <ktemkin@binghamton.edu> 
+ * @license GNU Public License, {@link http://www.gnu.org/copyleft/gpl.html}
+ */
+class moodle_quickmail_permissions_exception extends moodle_quickmail_exception {
 }
 
 /**
@@ -339,7 +352,7 @@ abstract class quickmail {
         return $html;
     }
 
-    function list_entries($courseid, $type, $page, $perpage, $userid, $count, $can_delete) {
+    static function list_entries($courseid, $type, $page, $perpage, $userid, $count, $can_delete) {
         global $CFG, $DB, $OUTPUT;
 
         $dbtable = 'block_quickmail_'.$type;
@@ -368,11 +381,11 @@ abstract class quickmail {
 
             $actions = array();
 
-            $open_link = html_writer::link(
-                new moodle_url('/blocks/quickmail/email.php', $params),
-                $OUTPUT->pix_icon('i/search', 'Open Email')
-            );
-            $actions[] = $open_link;
+            // BU-26
+            // If the e-mail has the no-forward flag set, then don't give the option to forward it.
+            if(empty($log->noforward)) { 
+                $actions[] = html_writer::link( new moodle_url('/blocks/quickmail/email.php', $params), $OUTPUT->pix_icon('forward', self::_s('forward'), 'block_quickmail'));
+            }
 
             if ($can_delete) {
                 $delete_params = $params + array(
@@ -629,7 +642,31 @@ abstract class quickmail {
         return self::has_capability_in_course('block/quickmail:allowalternate', $user, $course);
     }
 
+    /**
+     * Determines if the user has permission to message participients (e.g. their peers) using QuickMail.
+     * 
+     * @param context $context  The context in which QuickMail is being used.
+     * @param stdClass $user    The user to check permissions for. If not provided, the logged-in user will be used instead.
+     * @return bool             True iff the user can message participants.
+     */
+    public static function can_message_participants($context, $user = null) {
+        return has_capability('block/quickmail:cansend', $context, $user);
+    }
 
+    /**
+     * Determines if the user has permission to message their instructor (or whomever has the 'Recieve Ask Instructor e-mails' capability.
+     * 
+     * @param context $context  The context in which QuickMail is being used.
+     * @param stdClass $user    The user to check permissions for. If not provided, the logged-in user will be used instead.
+     * @return bool             True iff the user can message participants.
+     */
+     public static function can_message_instructor($context, $user = null) {
+        return has_capability('block/quickmail:canaskinstructor', $context, $user);
+    }
+
+
+
+    /*
     public static function get_question_data_from_id($id) {
 
         // Get a reference to the global database connection object.
@@ -670,7 +707,9 @@ abstract class quickmail {
         // Get the CourseID from the context.
         return $course_context->instanceid;
     }
+     */
 
+    /*
     public static function get_users_and_mappings(context $context, $course_id, $roles, $group_info, $target_groups = null)
     {
         // Get a reference to the currently logged-in user.
@@ -738,6 +777,7 @@ abstract class quickmail {
         // Return the list of users, a users->groups mapping, and a users->roles mapping.
         return array($users, $users_to_groups, $users_to_roles);
     }
+     */
 
 }
 

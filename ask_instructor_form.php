@@ -135,9 +135,10 @@ class ask_instructor_form extends email_form {
         $mform->addElement('hidden', 'userid', $USER->id);
         $mform->addElement('hidden', 'courseid', $COURSE->id);
         
-        //Pass through the type and typeid; by default, assume we're sending normal mail.
-        $mform->addElement('hidden', 'type', 'askinstructor');
-        $mform->addElement('hidden', 'typeid', 0); // TODO
+        // Pass through teach of the request parameters included by the parent e-mail composer.
+        foreach($this->_customdata['parameters'] as $name => $value) {
+            $mform->addElement('hidden', $name, $value);
+        }
 
         // Add the main components of the form.
         $this->add_mail_from();
@@ -158,7 +159,13 @@ class ask_instructor_form extends email_form {
 
         $buttons = array();
         $buttons[] =& $mform->createElement('submit', 'send', quickmail::_s('send_email'));
-        $buttons[] =& $mform->createElement('submit', 'draft', quickmail::_s('save_draft'));
+
+        // If the "Don't Allow Drafts" option is not set, then add a "save as draft" buttons.
+        if(empty($this->_customdata['nodraft'])) {
+            $buttons[] =& $mform->createElement('submit', 'draft', quickmail::_s('save_draft'));
+        }
+
+
         $buttons[] =& $mform->createElement('cancel');
 
         $mform->addGroup($buttons, 'buttons', quickmail::_s('actions'), array(' '), false);
@@ -441,6 +448,7 @@ class ask_instructor_form extends email_form {
 
         // Display the "To" e-mail addresse.
         // TODO: respect the instructor's desire to hide their e-mail if appropriate?
+        $emails = html_writer::tag('span', $emails, array('class' => 'qm-readonly'));
         $mform->addElement('static', 'mailtolabel', quickmail::_s('to'), $emails);
     }
 
@@ -467,7 +475,9 @@ class ask_instructor_form extends email_form {
         if (empty($alternates)) {
 
             // .. automatically specify the from address as their primary e-mail.
-            $mform->addElement('static', 'from', quickmail::_s('from'), $USER->email);
+            $emails = html_writer::tag('span', $this->_customdata['user']->email, array('class' => 'qm-readonly'));
+            $mform->addElement('static', 'mailtolabel', quickmail::_s('from'), $emails);
+
 
         // Otherwise, allow them to select from a list of alternates...
         } else {
@@ -494,12 +504,15 @@ class ask_instructor_form extends email_form {
         // Get a quick reference to the active form.
         $mform =& $this->_form;
 
-        // Add the an input for the subject. 
-        $mform->addElement('text', 'subject', quickmail::_s('subject'), array('style' => 'width: 100%;'));
-
-        // And ensure that a valid text response is provided.
-        $mform->setType('subject', PARAM_TEXT);
-        $mform->addRule('subject', null, 'required');
+        // If a pre-determined subject was provided, then add a read-only subject field:
+        if(!empty($this->_customdata['subject'])) {
+            $subject_text = html_writer::tag('div', $this->_customdata['subject'], array('class' => 'qm-readonly'));
+            $mform->addElement('static', 'subjectlabel', quickmail::_s('subject'), $subject_text);
+        }
+        // Otherwise, add a editable subject field: 
+        else {
+            $mform->addElement('text', 'subject', quickmail::_s('subject'));
+        }
 
         // Add a rich text editor, which is used to specify the contents of the e-mail.
         $mform->addElement('editor', 'message_editor', quickmail::_s('message'), array('style' => 'width: 100%;') , $this->_customdata['editor_options']);
@@ -528,4 +541,5 @@ class ask_instructor_form extends email_form {
         // And select the default according tot he core configuration.
         $mform->setDefault('receipt', !empty($config['receipt']));
     }
+
 }

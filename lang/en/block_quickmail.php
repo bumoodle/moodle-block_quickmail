@@ -62,8 +62,8 @@ $string['no_type'] = '{$a} is not in the acceptable type viewer. Please use the 
 $string['no_email'] = 'Could not email {$a->firstname} {$a->lastname}.';
 $string['no_log'] = 'You have no email history yet.';
 $string['no_drafts'] = 'You have no email drafts.';
-$string['no_subject'] = 'You must provide a subject for the e-mail to be send.';
-$string['no_subject_users'] = 'You must provide a subject and recipient(s) for the e-mail to be send.';
+$string['no_subject'] = 'You must provide a subject for the e-mail to be sent.';
+$string['no_subject_users'] = 'You must provide a subject and recipient(s) for the e-mail to be sent.';
 $string['no_permission'] = 'You do not have permission to send emails with MoodleMail.';
 $string['no_permission_user'] = 'You do not have permission to send e-mails to that user using MoodleMail.';
 $string['no_users'] = 'There are no users you are capable of emailing.';
@@ -121,4 +121,14 @@ received it by mistake. Simply discard this message.
 Thank you.
 ';
 
+
+//Ask Instructor
 $string['askinstructor'] = 'Ask Instructor';
+$string['messageinstructor'] = 'Message Instructor';
+$string['question_no_number'] = 'Question (Ask Instructor)';
+$string['question_number'] = 'Question {$a}';
+$string['origin_response'] = 'From {$a->link}, last updated {$a->time}:';
+$string['origin_unknown'] = 'From the question\'s text:';
+
+// Message for Ask Instructor situations in which drafts are not allowed.
+$string['no_draft_allowed'] = 'You cannot save a draft in this context.';

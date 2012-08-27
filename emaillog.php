@@ -37,11 +37,13 @@ $valid_actions = array('delete', 'confirm');
 
 $can_send = has_capability('block/quickmail:cansend', $context);
 
-$proper_permission = ($can_send or !empty($config['allowstudents']));
 
-$can_delete = ($can_send or ($proper_permission and $type == 'drafts'));
+$proper_permission = $can_send || has_capability('block/quickmail:canaskinstructor', $context);
 
-// Stops students from tempering with history
+// A user can only delete messages from their history if they have the 'candelete' capability. 
+$can_delete = has_capability('block/quickmail:candelete', $context);
+
+// Stops students from tampering with history
 if (!$proper_permission or (!$can_delete and in_array($action, $valid_actions))) {
     print_error('no_permission', 'block_quickmail');
 }

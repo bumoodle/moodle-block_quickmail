@@ -29,10 +29,7 @@ require_once($CFG->dirroot.'/mod/quiz/accessmanager.php');
  */
 abstract class quickmail_email_composer
 {
-    /**
-     *  Represents the default value of the signature parmeter; used to "skip" the signature ID positional argument.
-     */
-    const DEFAULT_SIGNATURE = 0;
+
 
     /**
      * The context from which this QuickMail message is being sent. 
@@ -73,15 +70,6 @@ abstract class quickmail_email_composer
 
 
     /**
-     * An array of parameters which are passed to the internal form; and included
-     * with any executed queries.
-     * 
-     * @var mixed
-     */
-    protected $request_parameters;
-
-
-    /**
      * An internal MoodleForm which is used to compose the e-mail message.
      * 
      * @var moodleform
@@ -94,66 +82,19 @@ abstract class quickmail_email_composer
     //
 
     /**
-     * Creates a new QuickMail e-mail composer object according to the permissions that the given user has.
-     * If the user cannot use a normal composer, as an exmaple
-     *
-     * @throws moodle_quickmail_permission_exception    Throw if the user does not have permission to access QuickMail while the $must_have_permission flag is set.
-     *
-     * @param int $course_id                The ID number of the course from which e-mail is to be sent.
-     * @param int $signature_id             The default signature for the quick-mail composer.
-     * @param array $request_parameters     An array of request parameters which will be included with any executed POST/GET query.
-     * @param stdClass $user                A reference to the user who is sending the given e-mail. If not provided, the currently logged-in user will be used instead.
-     * @param bool $must_have_permission    If this is set, an exception will be thrown if a user does not have permission.
-     * @return quickmail_email_composer     A quickmail_email_composer which is appropriately limited given the user's permissions, or null if the user shouldn't be able to send.
+     * Creates a new QuickMail e-mail object. 
+     * 
+     * @param int $course_id        The course ID which this 
+     * @param int $signature_id 
+     * @return void
      */
-    public static function create_according_to_permissions($course_id, $signature_id = 0, $requrest_parameters = array(), $user = null, $must_have_permission = false) {
-    
-        // In this base class, we assume that all e-mails are sent from the Course context.
-        $context = get_context_instance(CONTEXT_COURSE, $this->course->id);
-
-        // If the user has permission to message all course participants...
-        if (quickmail::can_message_participants($context, $user)) {
-
-            // ... return a full-access composer object.
-            return new quickmail_email_composer_selectable($course_id, $signature_id, $request_parameters, $user);
-        }
-        // Otherwise, if they have permission to message their instructor...
-        else if (quickmail::can_message_instructor($context, $user)) {
-
-            /// ... return a recipient-limited composer object.
-            return new quickmail_email_composer_ask_instructor($course_id, $signature_id, $request_parameters, $user);
-        }
-        // If the user does not have either of the above permissions, and must_have_permission is set, throw an exception.
-        else if($must_have_permission) {
-            throw new moodle_quickmail_permissions_exception('no_permission', 'block_quickmail');
-        }
-        // Otherwise, return null, indicating that no composer exists which matches the user's permission level.
-        else {
-            return null;
-        }
-
-    }
-
-
-    /**
-     * Creates a new QuickMail e-mail composer.
-     *
-     * @param int $course_id                The ID number of the course from which e-mail is to be sent.
-     * @param int $signature_id             The default signature for the quick-mail composer.
-     * @param array $request_parameters     An array of request parameters which will be included with any executed POST/GET query.
-     * @param stdClass $user                   A reference to the user who is sending the given e-mail. If not provided, the currently logged-in user will be used instead.
-     * @return quickmail_email_composer
-     */
-    public function __construct($course_id, $signature_id = 0, $request_parameters = array(), $user = null) {
+    public function __construct($course_id, $signature_id = 0, $user = null) {
 
         // Get a reference to the currently logged-in user.
         global $USER;
 
         // Set the active user. If no user was provided, then use the currently logged-in user. 
         $this->user = ($user === null) ? $USER : $user;
-
-        // Store the array of request parameters; for use in form creation.
-        $this->request_parameters = $request_parameters;
 
         // Set the current course.
         $this->set_course_by_id($course_id);
@@ -257,9 +198,8 @@ abstract class quickmail_email_composer
 
     /**
      * Set the Course from which this e-mail is being sent.
-     *
-     * @param int $course_id
-     * @throws moodle_quickmail_exception
+     * 
+     * @param int $course_id 
      * @return void
      */
     public function set_course_by_id($course_id) {
@@ -295,7 +235,7 @@ abstract class quickmail_email_composer
     /**
      * Returns the ID number for a given user's default signature.
      * 
-     * @return int  The ID number that
+     * @return void
      */
     protected function get_default_signature_id()
     {
@@ -335,9 +275,9 @@ abstract class quickmail_email_composer
     protected function get_compose_editor_options()
     {
         // Assume the following message options.
+        // TODO: modify these options
         return array(
-            'maxbytes' => $this->course->maxbytes,
-            'trusttext' => trusttext_trusted($this->context),
+            'trusttext' => true,
             'subdirs' => true,
             'maxfiles' => EDITOR_UNLIMITED_FILES,
             'context' => $this->context,
@@ -444,10 +384,11 @@ abstract class quickmail_email_composer
 
         // The user can send e-mails using this default base class iff they have the 'cansend' capability.
         // If they don't, throw an exception
-        if(!quickmail::can_message_participants($this->context, $this->user)) {
-            throw new moodle_quickmail_permissions_exception('no_permission', 'block_quickmail');
+        if(!has_capability('block/quickmail:cansend', $this->context)) {
+            throw new moodle_quickmail_exception('no_permission', 'block_quickmail');
         }
     }
+
     
    /**
      * An abstract function which will return true if and only if the e-mail has addressible recipients.
@@ -479,7 +420,7 @@ abstract class quickmail_email_composer
         }  
 
         // Determine if recipients and a subject were provided.
-        $no_subject = $this->get_subject_line($data) == false;
+        $no_subject = empty($data->subject);
         $no_users = $this->get_recipients($data) == false;
 
         //If neither was provided, throw an exception.
@@ -606,54 +547,22 @@ abstract class quickmail_email_composer
      */
     protected function get_prefixed_subject($data)
     {
-        // Get the course-property which should be prepended to the class name, if any.
-        $prepend = $this->options->prepend_class;
-
-        // Get the unmodified subject line for the current e-mail.
-        $subject = $this->get_subject_line($data);
+        // Determine if we should prepend the course name / prefix to the e-mail subject line.
+        $prepend = !empty($qm_config['prepend_class']);
 
         // If we should, and the course has a prefix specified...
-        if (!empty($prepend) && !empty($this->course->$prepend)) {
+        if ($prepend && !empty($this->course->$prepender)) {
 
             // ... add it to the subject line, and return the result. 
-            return '['.$this->course->$prepend.'] '.$subject;
+            return '['.$this->course->$prepender.'] '.$data->subject;
 
         } else {
 
             // Otherwise, use the subject line directly.
-           return $subject;
+           return $data->subject;
         }
 
     }
-
-    /**
-     * Returns the subject line for the given e-mail. This simple method is intended to allow
-     * extending classes to easly override the subject line.
-     * 
-     * @param array $data   The form data to process. If not provided, the internal form's data will be used.
-     * @return string       The given e-mail's subject line; or an empty string if no subject line exists.
-     */
-    protected function get_subject_line($data = null) {
-
-        // If no form data was provided, load the form data from the internal form.
-        if($data === null) {
-            $data = $this->form->get_data();
-        }
-
-        // If no subject data exists...
-        if(empty($data->subject)) {
-            
-            // ... return an empty string.
-            return '';
-
-        } else {
-
-            // Otherwise, return the form's subject directly.
-            return $data->subject;
-        }
-
-    }
-
 
     /**
      * Adds the currently selected signature to the message.
@@ -729,6 +638,13 @@ abstract class quickmail_email_composer
         // save record of the e-mail to be sent in the database.
         $this->save_record($data);
          
+
+        // If this data was previously a draft, then clean up the draft data before sending.
+        // TODO
+        //if ($type == 'drafts') {
+        //    self::draft_cleanup($typeid);
+        // }
+
         // Convert the attached files into a zip file for sending.
         list($zipname, $zip, $actual_zip) = quickmail::process_attachments($this->context, $data, 'log', $data->id);
 
@@ -821,9 +737,6 @@ abstract class quickmail_email_composer
 
         // Ensure that the mailto field matches the list of recipients.
         $data->mailto = implode(',', array_keys($recipients));
-
-        // Ensure that the subject line is up-to-date.
-        $data->subject = $this->get_subject_line($data);
     }
 
 } 
@@ -888,10 +801,10 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
      * @param int $signature_id 
      * @return void
      */
-    public function __construct($course_id, $signature_id = 0, $request_parameters = array(), $user = null)
+    public function __construct($course_id, $signature_id = 0, $user = null)
     {
         // Call the parent constructor to set up the main QuickMail information.
-        parent::__construct($course_id, $signature_id, $request_parameters, $user);
+        parent::__construct($course_id, $signature_id, $user);
 
         // And load the additional information used to filter recipients.
         $this->load_roles();
@@ -928,7 +841,7 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
     protected function load_groups() {
 
         // If the current user can see all groups in a given context...
-        if (has_capability('moodle/site:accessallgroups', $this->context, $this->user)) {
+        if (has_capability('moodle/site:accessallgroups', $this->context)) {
 
             // ... then load all of the groups present in this context.
             $this->groups = groups_get_all_groups($this->course->id);
@@ -973,6 +886,7 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
             }
 
             // Get a list of roles for the _target_ user...
+            // FIXME: is this redundant with the query above?
             $user_roles = get_user_roles($this->context, $user_id);
 
             // ... and filter those roles according to the current QuickMail settings.
@@ -1026,7 +940,7 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
 
         // If the user is not allowed to access all groups in the current context,
         // create a "filter" which identifies which groups the user can access. 
-        if (!has_capability('moodle/site:accessallgroups', $this->context, $this->user)) {
+        if (!has_capability('moodle/site:accessallgroups', $this->context)) {
 
             // Get an array of groups which the current user is a member of.
             $member_groups = groups_get_user_groups($this->course->id);
@@ -1072,7 +986,6 @@ class quickmail_email_composer_selectable extends quickmail_email_composer
             'users_to_groups' => $this->users_to_groups,
             'sigs' => array_map(function($sig) { return $sig->title; }, $this->signatures),
             'alternates' => array(), //$alternates
-            'parameters' => $this->request_parameters
         );
 
         // Create the e-mail composition form.
@@ -1127,11 +1040,10 @@ class quickmail_email_composer_from_existing extends quickmail_email_composer_se
      * 
      * @param int $record_id    The ID number of the e-mail record to be loaded.
      * @param string $type      The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
-     * @param array $request_parameters     An array of request parameters which will be included with any executed POST/GET query.
      * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
      * @return void
      */
-    public function __construct($record_id, $type = quickmail_view_type::DRAFT, $request_parameters = array(), $user = null) {
+    public function __construct($record_id, $type = quickmail_view_type::DRAFT, $user = null) {
 
         // Get a reference to the global database object.
         global $DB;
@@ -1151,7 +1063,7 @@ class quickmail_email_composer_from_existing extends quickmail_email_composer_se
         $this->type = $type;
 
         // Call the parent constructor to complete the creation of the e-mail composer.
-        parent::__construct($this->record->courseid, self::NO_SIGNATURE, $request_parameters, $user);
+        parent::__construct($this->record->courseid, self::NO_SIGNATURE, $user);
 
     }
 
@@ -1201,14 +1113,12 @@ class quickmail_email_composer_from_existing extends quickmail_email_composer_se
         $data = array(
             'editor_options' => $this->get_compose_editor_options(),
             'users' => $this->users,
-            'user' => $this->user,
             'roles' => $this->roles,
             'groups' => $this->groups,
             'users_to_roles' => $this->users_to_roles,
             'users_to_groups' => $this->users_to_groups,
             'alternates' => array(), //$alternates
-            'mailto' => $this->record->mailto,
-            'parameters' => $this->request_parameters
+            'mailto' => $this->record->mailto
         );
 
         // Create the e-mail composition form.
@@ -1255,41 +1165,18 @@ class quickmail_email_composer_from_draft extends quickmail_email_composer_from_
      * Creates a new QuickMail message composer object from an existing saved draft. 
      * A convenience shorthand for quickmail_email_composer_from_existing.
      * 
-     * @param int $record_id                The ID number of the e-mail record to be loaded.
-     * @param string $type                  The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
-     * @param array $request_parameters     An array of request parameters which will be included with any executed POST/GET query.
-     * @param stdClass $user                The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
+     * @param int $record_id    The ID number of the e-mail record to be loaded.
+     * @param string $type      The type of message to be loaded; typically a member of the quickmail_view_type psuedo-enumeration.
+     * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
      * @return void
      */
-    public function __construct($record_id, $request_parameters = array(), $user = null) {
+    public function __construct($record_id, $user = null) {
 
         // Call the parent constructor to complete the creation of the e-mail composer.
-        parent::__construct($record_id, quickmail_view_type::DRAFT, $request_parameters, $user);
+        parent::__construct($record_id, quickmail_view_type::DRAFT, $user);
 
     }
 
-    /**
-     * Send the message which was composed using this QuickMail composer.
-     * 
-     * @param bool $update_form     If true, the form's data will be updated according to the modifications made during the send process- 
-     *                              e.g. the appending of the signature. Be careful if you se this to false- as the internal file areas may not be properly updated.
-     * @return aray                 A list of non-fatal error messages which have occurred during e-mail sending.
-     */
-    public function send_message($update_form = true) {
-
-        // Send the e-mail message normally...
-        $errors = parent::send_message($update_form);
-
-        // If no errors have occurred...
-        if(empty($errors)) {
-
-            // ... remove the draft, as we've sent out the relevant e-mail.
-            self::draft_cleanup($this->record->id);
-        }
-
-        // Return the list of encountered errors.
-        return $errors;
-    }
 
 }
 
@@ -1314,10 +1201,10 @@ class quickmail_email_composer_forward extends quickmail_email_composer_from_exi
      * @param stdClass $user    The user who is composing the given e-mail. If not provided, the logged-in user will be used. 
      * @return void
      */
-    public function __construct($record_id, $request_parameters = array(), $user = null) {
+    public function __construct($record_id, $user = null) {
 
         // Call the parent constructor to complete the creation of the e-mail composer.
-        parent::__construct($record_id, quickmail_view_type::SENT_MAIL, $request_parameters, $user);
+        parent::__construct($record_id, quickmail_view_type::SENT_MAIL, $user);
 
     }
 
@@ -1386,7 +1273,7 @@ class quickmail_email_composer_ask_instructor extends quickmail_email_composer
 
         // If we don't already have a cached list of Ask Instructor instructors, then retrieve the user list from the database.
         if($this->instructors === null) {
-            $this->instructors = get_users_by_capability($this->context, 'block/quickmail:recieveaskinstructor', 'u.id, u.firstname, u.lastname, u.email, u.mailformat');
+            $this->instructors = get_users_by_capability($this->context, 'block/quickmail:recieveaskinstructor', 'u.id, u.firstname, u.lastname, u.email');
         }
 
         // Return the list of instructors who should recieve Ask Instructor users in this context.
@@ -1418,8 +1305,6 @@ class quickmail_email_composer_ask_instructor extends quickmail_email_composer
             'instructors' => $this->get_ask_instructor_users(), 
             'sigs' => array_map(function($sig) { return $sig->title; }, $this->signatures),
             'alternates' => array(), //$alternates
-            'user' => $this->user,
-            'parameters' => $this->request_parameters
         );
 
         // Create the e-mail composition form.
@@ -1453,8 +1338,8 @@ class quickmail_email_composer_ask_instructor extends quickmail_email_composer
 
         // The user can send e-mails using this default base class iff they have the 'cansend' capability.
         // If they don't, throw an exception
-        if(!quickmail::can_message_instructor($this->context, $this->user)) {
-            throw new moodle_quickmail_permissions_exception('no_permission', 'block_quickmail');
+        if(!has_capability('block/quickmail:canaskinstructor', $this->context)) {
+            throw new moodle_quickmail_exception('no_permission', 'block_quickmail');
         }
     }
 
@@ -1468,24 +1353,8 @@ class quickmail_email_composer_ask_instructor extends quickmail_email_composer
 
         // In Ask Instructor mode, the recipients are always equal to the list of Ask Instructor users.
         return $this->get_ask_instructor_users();
+
     }
-
-    /**
-     * Prepares the given e-mail data for storage in the Moodle database.
-     * Modifies the data object in place.
-     * 
-     * @return void
-     */
-    protected function prepare_for_save($data) {
-
-        // Call the parent prepare-for-save to perform the core modifications...
-        parent::prepare_for_save($data);
-
-        // ... and then indicate that "ask instructor" messages should not be forwardable.
-        $data->noforward = 1;
-    }
-
-
 }
 
 
@@ -1554,7 +1423,7 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
      * @param int $signature_id 
      * @return void
      */
-    public function __construct($attempt_id, $number = -1, $request_parameters = array(), $user = null) {
+    public function __construct($attempt_id, $number = -1, $user = null) {
 
         // Get a reference to the currently logged-in user; and the global database connection.
         global $DB, $USER;
@@ -1581,9 +1450,6 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
 
         // Store the question number, which is used in the e-mail body.
         $this->number = $number;
-
-        // Store the extra request parameters, which are added to any request.
-        $this->request_parameters = $request_parameters;
 
         // And create the context in which this e-mail will be sent.
         $this->create_context();
@@ -1634,12 +1500,11 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
     }
 
     /**
-     * returns an appropriate subject line for the ask instructor e-mail.
+     * Returns an appropriate subject line for the Ask Instructor e-mail.
      * 
-     * @param array $data   the data loaded from the core form. if not provided, the form data will be loaded automatically.
      * @return void
      */
-    protected function get_subject_line($data = null) {
+    protected function get_subject_line() {
 
         // Unfortunately, we can't easily get the name of the activity from the QUBA;
         // and course modules don't have a standard naming convention. 
@@ -1770,8 +1635,6 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
             'sigs' => array_map(function($sig) { return $sig->title; }, $this->signatures),
             'user' => $this->user,
             'alternates' => array(), //$alternates
-            'parameters' => $this->request_parameters,
-            'nodraft' => true
         );
 
         // Create the e-mail composition form.
@@ -1869,32 +1732,20 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
         switch($this->quba->get_owning_component())
         {
 
-            // If this e-mail was created from a quiz question, get a link to that question:
             case 'mod_quiz':
 
-                // Get the two parameters which are used to compose the "origin" text...
                 $data = array(
-
-                            // ... a link where the instructor/student can "review" (or continue) the question...
                             'link' => html_writer::link($this->quiz_get_review_url(), $this->get_subject_line()),
-
-                            // ... and the date/time when the question was last attempted.
                             'time' => userdate($this->question_attempt->get_last_action_time())
                         );
 
-                // Using these two parameters, build the "From a question..." text.
                 $link .= quickmail::_s('origin_response', $data);
-                break;
 
-            // If we don't have a better way of determining the question's origin, add a short header that specifies
-            // that this was taken from question text.
             default:
                 $link .= quickmail::_s('origin_unknown');
-                break;
 
         }
 
-        // End the paragraph.
         $link .= html_writer::end_tag('p');
 
         // Return the link.
@@ -1928,22 +1779,6 @@ class quickmail_email_composer_quiz_question extends quickmail_email_composer_as
         return clean_text($question_text);
 
     }
-
-    /**
-     * Save a 'draft' record of an e-mail, which can later be resumed and sent.
-     * 
-     * @param int $existing_id      If provided, the draft with the given ID will be updated.
-     * @param bool $update_form     If true, the form's data will be updated according to the modifications made during the send process- 
-     *                              e.g. the appending of the signature. Be careful if you se this to false- as the internal file areas may not be properly updated.
-     * @return void
-     */
-     public function save_draft($existing_id = null, $update_form = true) {
-
-         // We won't allow drafts for Ask Instructor quiz questions, as this would allow students to save question questions when
-         // they shouldn't be able to. (Ask Instr. can be disabled on a per-context level; but this allows it to be used in short-term quizzes.)
-         throw new moodle_quickmail_exception('no_draft_allowed', 'block_quickmail');
-
-     }
    
 
 }

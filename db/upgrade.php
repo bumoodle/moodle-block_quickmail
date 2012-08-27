@@ -159,5 +159,21 @@ function xmldb_block_quickmail_upgrade($oldversion) {
         upgrade_block_savepoint($result, 2012061112, 'quickmail');
     }
 
+    //Automatically generated code which adds the 'noforward' field.
+    if ($oldversion < 2012082703) {
+
+        // Define field id to be added to block_quickmail_log
+        $table = new xmldb_table('block_quickmail_log');
+        $field = new xmldb_field('noforward', XMLDB_TYPE_INTEGER, '1', null, null, null, '0', 'time');
+
+        // Conditionally launch add field id
+        if (!$dbman->field_exists($table, $field)) {
+            $dbman->add_field($table, $field);
+        }
+
+        // quickmail savepoint reached
+        upgrade_block_savepoint($result, 2012082703, 'quickmail');
+    }
+
     return $result;
 }

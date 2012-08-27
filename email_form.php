@@ -135,9 +135,10 @@ class email_form extends moodleform {
         $mform->addElement('hidden', 'userid', $USER->id);
         $mform->addElement('hidden', 'courseid', $COURSE->id);
 
-        // Pass through the type and typeid; by default, assume we're sending normal mail.
-        $mform->addElement('hidden', 'type', '');
-        $mform->addElement('hidden', 'typeid', 0);
+        // Pass through teach of the request parameters included by the parent e-mail composer.
+        foreach($this->_customdata['parameters'] as $name => $value) {
+            $mform->addElement('hidden', $name, $value);
+        }
 
         // Add the main components of the form.
         $this->add_history_links();
@@ -422,12 +423,16 @@ class email_form extends moodleform {
             // For each of the selected users, move the user object from the "user pool" to the "selected" pool.
             foreach($selected_ids as $id) {
 
-                // Add the user to the selected pool...
-                $selected[$id] = $this->_customdata['users'][$id];
+                // If the user is able to e-mail the given user...
+                if(array_key_exists($id, $this->_customdata['users'])) {
 
-                // ... and remove them from the user pool.
-                unset($this->_customdata['users'][$id]);
+                    // Add the user to the selected pool...
+                    $selected[$id] = $this->_customdata['users'][$id];
 
+                    // ... and remove them from the user pool.
+                    unset($this->_customdata['users'][$id]);
+                   
+                }
             }
         }
 
